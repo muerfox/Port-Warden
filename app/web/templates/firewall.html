@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Preview shows the nftables transaction. Apply is a separate confirmation. With the default backend, apply only stores a snapshot.</p>
+<p>Management SSH stays open for {{ management | join(", ") }} on tcp/{{ ssh_port }}.</p>
+<p>Installed: {{ "yes" if status_info.installed else "no" }}. Drift: {{ "yes" if status_info.drift else "no" }}. Backend: {{ status_info.backend }}.</p>
+{% for warning in status_info.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+<form method="post" action="/firewall/mode">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Mode
+    <select name="mode">
+      <option value="enforce" {% if status_info.mode == 'enforce' %}selected{% endif %}>enforce</option>
+      <option value="monitor" {% if status_info.mode == 'monitor' %}selected{% endif %}>monitor</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="monitor_ack" value="yes"> I understand monitor mode can accept traffic ahead of a later firewall.</label>
+  <button type="submit">Store mode</button>
+</form>
+<form method="post" action="/firewall/preview">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit">Preview changes</button>
+</form>
+<form method="post" action="/firewall/rollback">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button class="quiet" type="submit">Roll back previous applied snapshot</button>
+</form>
+{% if preview %}
+  <h2>Preview</h2>
+  {% if preview.lockout_risk %}<p class="warning">{{ preview.lockout_reason }}</p>{% else %}<p class="ok">{{ preview.lockout_reason }}</p>{% endif %}
+  {% for warning in preview.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+  {% if preview.diff %}<pre>{{ preview.diff }}</pre>{% endif %}
+  <pre>{{ preview.script }}</pre>
+  <form class="stack" method="post" action="/firewall/apply">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="confirm_token" value="{{ preview.confirm_token }}">
+    {% if preview.lockout_risk %}
+      <label>Type I_UNDERSTAND_LOCKOUT to apply despite lockout risk
+        <input name="lockout_phrase" autocomplete="off">
+      </label>
+    {% endif %}
+    <button type="submit">{{ "Apply to host nftables" if preview.enforces else "Stage snapshot only" }}</button>
+  </form>
+{% endif %}
+{% endblock %}

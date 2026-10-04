@@ -1,0 +1,10 @@
+[project]
+name = "port-warden"
+version = "0.1.0"
+description = "Defensive host firewall and security dashboard"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Structured events are kept for {{ retention }} days. The export is the same JSON records, without secrets.</p>
+<p><a href="/api/v1/events/export">Export JSON lines</a></p>
+<table>
+  <thead><tr><th>Time</th><th>Type</th><th>Source</th><th>Port</th><th>Action</th><th>Rule</th></tr></thead>
+  <tbody>
+  {% for event in events %}
+    <tr>
+      <td>{{ event.timestamp }}</td>
+      <td>{{ event.event_type }}</td>
+      <td>{{ event.src_ip }}</td>
+      <td>{{ event.dst_port or "" }}</td>
+      <td>{{ event.action }}</td>
+      <td>{{ event.rule_id }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6">No events.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

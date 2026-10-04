@@ -1,0 +1,10 @@
+/var/lib/port-warden/logs/port-warden.jsonl {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    copytruncate
+    maxsize 10M
+    compress
+    delaycompress
+}

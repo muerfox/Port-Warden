@@ -1,0 +1,34 @@
+# Optional, standalone, not the default. Do not merge this with the bridge compose file.
+# It uses the host network namespace and CAP_NET_ADMIN so nftables changes the host.
+# That capability can rewrite the host firewall. It is still not --privileged.
+# Prefer host-agent/port-warden-agent.service when you can.
+
+name: port-warden-host
+
+services:
+  port-warden:
+    build: .
+    image: port-warden:local
+    env_file:
+      - .env
+    network_mode: host
+    environment:
+      PORT_WARDEN_BIND_HOST: 127.0.0.1
+      PORT_WARDEN_EXPOSE_PUBLIC: "0"
+      PORT_WARDEN_NFT_BACKEND: local
+      PORT_WARDEN_DATA_DIR: /var/lib/port-warden
+      PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
+    volumes:
+      - ./data:/var/lib/port-warden
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    mem_limit: 256m
+    restart: unless-stopped

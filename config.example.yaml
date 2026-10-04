@@ -1,0 +1,24 @@
+# Optional file config. Environment variables override these values.
+# Load with PORT_WARDEN_CONFIG=/path/to/config.yaml
+
+bind_host: 127.0.0.1
+bind_port: 8443
+expose_public: false
+cookie_secure: false
+firewall_mode: enforce
+management_cidrs:
+  - 127.0.0.1/32
+  - ::1/128
+ssh_port: 22
+nft_backend: disabled
+log_retention_days: 30
+log_max_bytes: 5000000
+bf_threshold: 5
+bf_window_seconds: 600
+bf_ban_seconds: 3600
+bf_cooldown_seconds: 600
+bf_permanent_after: 0
+ban_auto_apply: false
+reachability_targets: []
+login_rate_limit: 5
+login_rate_window: 300

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Port Warden</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <section class="login">
+    <h1>Port Warden</h1>
+    <p class="lede">Sign in to manage this host’s firewall. The desk listens on the management address only.</p>
+    {% if error %}<p class="warning">{{ error }}</p>{% endif %}
+    <form class="stack" method="post" action="/login">
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <label>Authentication code <input name="totp" inputmode="numeric" autocomplete="one-time-code" placeholder="Only if MFA is on"></label>
+      <button type="submit">Sign in</button>
+    </form>
+  </section>
+</body>
+</html>

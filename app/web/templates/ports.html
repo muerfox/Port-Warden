@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="note">{{ note }} Port Warden does not scan the internet. A reachability check runs only for an address you configured.</p>
+{% if not targets %}<p>No reachability targets are configured.</p>{% else %}<p>Configured targets: {{ targets | join(", ") }}</p>{% endif %}
+<table>
+  <thead><tr><th>Proto</th><th>Address</th><th>Port</th><th>Scope</th></tr></thead>
+  <tbody>
+  {% for row in listeners %}
+    <tr>
+      <td>{{ row.protocol }}</td>
+      <td>{{ row.address }}</td>
+      <td>{{ row.port }}</td>
+      <td>{{ row.scope_label }}{% if row.possibly_public %} · possibly reachable{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4">No listeners reported.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

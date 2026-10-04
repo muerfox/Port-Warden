@@ -1,0 +1,12 @@
+FROM python:3.12.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DECOY_MODE=ssh \
+    DECOY_PORT=2222
+
+WORKDIR /opt/decoy
+COPY honeypots/decoy.py /opt/decoy/decoy.py
+USER 65534:65534
+EXPOSE 2222
+ENTRYPOINT ["python", "/opt/decoy/decoy.py"]

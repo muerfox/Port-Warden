@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Desired firewall state lives in the database. The host keeps the last applied nftables table if this process stops.</p>
+<section class="metrics">
+  <div><strong>{{ "yes" if firewall.installed else "no" }}</strong> Installed</div>
+  <div><strong>{{ "yes" if firewall.drift else "no" }}</strong> Drift</div>
+  <div><strong>{{ listener_count }}</strong> Listeners</div>
+  <div><strong>{{ ban_count }}</strong> Active bans</div>
+</section>
+<p>Backend <code>{{ firewall.backend }}</code> · mode <code>{{ firewall.mode }}</code></p>
+<p>Brute-force threshold {{ bruteforce.threshold }} failures in {{ bruteforce.window_seconds }}s, then a {{ bruteforce.ban_seconds }}s ban. Permanent bans after {{ bruteforce.permanent_after or "never" }}.</p>
+{% for warning in firewall.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+<p class="note">{{ note }}</p>
+{% endblock %}

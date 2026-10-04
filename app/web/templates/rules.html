@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Presets fill the form. They do not open ports until you save a rule and apply it.</p>
+{% if error %}<p class="warning">{{ error }}</p>{% endif %}
+<p>
+  {% for preset in presets %}
+    <a href="/rules?preset={{ preset.id }}">{{ preset.id }}</a>{% if not loop.last %} · {% endif %}
+  {% endfor %}
+</p>
+<form class="stack" method="post" action="/rules">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Name <input name="name" required value="{{ draft.name or '' }}"></label>
+  <label>Action
+    <select name="action">
+      <option value="allow" {% if draft.action == 'allow' %}selected{% endif %}>allow</option>
+      <option value="deny" {% if draft.action == 'deny' %}selected{% endif %}>deny</option>
+    </select>
+  </label>
+  <label>Direction
+    <select name="direction">
+      <option value="in" {% if draft.direction != 'out' %}selected{% endif %}>in</option>
+      <option value="out" {% if draft.direction == 'out' %}selected{% endif %}>out</option>
+    </select>
+  </label>
+  <label>Protocol
+    <select name="protocol">
+      {% for proto in ['tcp', 'udp', 'icmp', 'any'] %}
+        <option value="{{ proto }}" {% if draft.protocol == proto %}selected{% endif %}>{{ proto }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Source CIDR <input name="src_cidr" placeholder="optional"></label>
+  <label>Destination CIDR <input name="dst_cidr" placeholder="optional"></label>
+  <label>Ports <input name="ports" value="{{ draft.ports or '' }}" placeholder="22 or 80,443"></label>
+  <label>Comment <input name="comment" value="{{ draft.comment or '' }}"></label>
+  <label>Priority <input name="priority" type="number" value="{{ draft.priority or 100 }}"></label>
+  <label>Expires <input name="expires_at" type="datetime-local"></label>
+  <button type="submit">Save rule</button>
+</form>
+<h2>Desired rules</h2>
+<table>
+  <thead><tr><th>Priority</th><th>Name</th><th>Action</th><th>Match</th><th>Comment</th><th>Expires</th><th></th></tr></thead>
+  <tbody>
+  {% for rule in rules %}
+    <tr id="rule-{{ rule.id }}">
+      <td>{{ rule.priority }}</td>
+      <td>{{ rule.name }}</td>
+      <td>{{ rule.action }} {{ rule.direction }}</td>
+      <td>{{ rule.protocol }} {{ rule.ports or '' }} {{ rule.src_cidr or '' }}</td>
+      <td>{{ rule.comment }}</td>
+      <td>{{ rule.expires_at or '' }}</td>
+      <td>
+        <form method="post" action="/rules/{{ rule.id }}/delete" hx-post="/rules/{{ rule.id }}/delete" hx-target="#rule-{{ rule.id }}" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="quiet" type="submit">Remove</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7">No rules yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

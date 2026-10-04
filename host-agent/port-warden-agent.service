@@ -1,0 +1,19 @@
+[Unit]
+Description=Port Warden nftables agent
+After=network-pre.target
+Before=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/port-warden/host-agent/agent.py --socket /run/port-warden/apply.sock --token-file /etc/port-warden/agent.token --state-dir /var/lib/port-warden
+RuntimeDirectory=port-warden
+StateDirectory=port-warden
+User=root
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/port-warden /run/port-warden
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

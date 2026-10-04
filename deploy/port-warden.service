@@ -1,0 +1,20 @@
+[Unit]
+Description=Port Warden dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=portwarden
+Group=portwarden
+WorkingDirectory=/opt/port-warden
+EnvironmentFile=/etc/port-warden/port-warden.env
+ExecStart=/opt/port-warden/.venv/bin/python -m app
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/port-warden
+# Do not grant CAP_NET_ADMIN here. Use host-agent/port-warden-agent.service to apply nftables.
+
+[Install]
+WantedBy=multi-user.target

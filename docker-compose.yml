@@ -1,0 +1,107 @@
+# Build and serve the dashboard:
+#   docker compose up --build
+# UI: http://127.0.0.1:9000/
+#
+# The API container cannot change host nftables. EXPOSE_PUBLIC applies only
+# inside the container network namespace; the host publish address below is
+# the exposure control. Copy secrets into .env for a real deployment.
+
+name: port-warden
+
+services:
+  port-warden:
+    build: .
+    image: port-warden:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT_WARDEN_BIND_HOST: 0.0.0.0
+      PORT_WARDEN_BIND_PORT: "8443"
+      PORT_WARDEN_EXPOSE_PUBLIC: "1"
+      PORT_WARDEN_NFT_BACKEND: disabled
+      PORT_WARDEN_DATA_DIR: /var/lib/port-warden
+      PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
+      PORT_WARDEN_COOKIE_SECURE: "0"
+      # Override these in .env for anything beyond a local trial.
+      PORT_WARDEN_SECRET_KEY: ${PORT_WARDEN_SECRET_KEY:-compose-dev-secret-change-me-please}
+      PORT_WARDEN_ADMIN_USERNAME: ${PORT_WARDEN_ADMIN_USERNAME:-admin}
+      PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
+    ports:
+      - "127.0.0.1:9000:8443"
+    volumes:
+      - ./data:/var/lib/port-warden
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    # Entrypoint needs ownership of the data volume, then drops to uid 10001.
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8443/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  honeypot-ssh:
+    profiles: ["honeypots"]
+    build:
+      context: .
+      dockerfile: Dockerfile.honeypot
+    environment:
+      DECOY_MODE: ssh
+      DECOY_PORT: "2222"
+      HONEYPOT_LOG: /var/log/honeypot/ssh.jsonl
+    ports:
+      - "2222:2222"
+    volumes:
+      - ./data/honeypot:/var/log/honeypot
+    networks: [decoy]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
+    mem_limit: 64m
+    pids_limit: 32
+    restart: unless-stopped
+
+  honeypot-http:
+    profiles: ["honeypots"]
+    build:
+      context: .
+      dockerfile: Dockerfile.honeypot
+    environment:
+      DECOY_MODE: http
+      DECOY_PORT: "8088"
+      HONEYPOT_LOG: /var/log/honeypot/http.jsonl
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./data/honeypot:/var/log/honeypot
+    networks: [decoy]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
+    mem_limit: 64m
+    pids_limit: 32
+    restart: unless-stopped
+
+networks:
+  decoy:
+    internal: true

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="warning">Decoy / monitoring only. These are not production services and they do not give a remote caller a shell.</p>
+<p class="lede">Honeypots are opt-in. Saving the switch does not start Docker. Run the compose profile yourself, on a host you are allowed to administer. The decoy network has no outbound route. Do not use captured traffic to retaliate or to probe the remote system.</p>
+<p class="note">IP addresses in decoy logs are personal data in many jurisdictions. Keep the retention window short and do not deploy a decoy where you are not the operator.</p>
+{% for item in honeypots %}
+  <h2>{{ item.name }}</h2>
+  <p>{{ item.label }}. {{ item.note }} Listener suggestion: {{ item.listen_port }}/tcp. Desired state: {{ "on" if item.enabled else "off" }}.</p>
+  <form method="post" action="/honeypots/{{ item.name }}/toggle">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="enabled" value="{{ 'no' if item.enabled else 'yes' }}">
+    <button type="submit">{{ "Mark off" if item.enabled else "Mark on" }}</button>
+  </form>
+{% endfor %}
+<h2>Telemetry</h2>
+<table>
+  <thead><tr><th>Time</th><th>Source</th><th>Kind</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for event in telemetry %}
+    <tr>
+      <td>{{ event.timestamp }}</td>
+      <td>{{ event.src }}</td>
+      <td>{{ event.kind }}</td>
+      <td>{{ event.detail }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4">No decoy telemetry files yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

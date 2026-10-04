@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{{ title }} · Port Warden</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <p class="brand">Port Warden</p>
+      <p class="tagline">Host firewall desk</p>
+      <nav>
+        <a href="/">Status</a>
+        <a href="/ports">Ports</a>
+        <a href="/rules">Rules</a>
+        <a href="/lists">Lists</a>
+        <a href="/bans">Bans</a>
+        <a href="/firewall">Firewall</a>
+        <a href="/events">Events</a>
+        <a href="/honeypots">Honeypots</a>
+        <a href="/audit">Audit</a>
+      </nav>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="quiet" type="submit">Sign out {{ username }}</button>
+      </form>
+    </aside>
+    <main>
+      <h1>{{ title }}</h1>
+      {% if message %}<p class="note">{{ message }}</p>{% endif %}
+      {% block body %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

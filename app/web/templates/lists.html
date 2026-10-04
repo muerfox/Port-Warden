@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Allowlist entries are accepted before denylist and ban drops. Management CIDRs cannot be denied.</p>
+{% for item in lists %}
+  <h2>{{ item.name }} · {{ item.kind }}</h2>
+  <p>{{ item.comment }}</p>
+  <ul>
+    {% for entry in item.entries %}
+      <li>{{ entry.cidr }} {% if entry.comment %}— {{ entry.comment }}{% endif %}</li>
+    {% else %}
+      <li>Empty.</li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="/lists/{{ item.id }}/entries">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="cidr" placeholder="203.0.113.10 or 203.0.113.0/24" required>
+    <input name="comment" placeholder="comment">
+    <button type="submit">Add</button>
+  </form>
+{% endfor %}
+{% endblock %}

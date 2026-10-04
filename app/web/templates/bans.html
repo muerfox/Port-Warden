@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Failures are counted from SSH authentication lines. Allowlisted and management addresses are not banned. Automatic nftables updates stay off unless ban auto-apply is configured.</p>
+<h2>Thresholds</h2>
+<form method="post" action="/bruteforce/settings">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Failures <input name="threshold" type="number" value="{{ settings.threshold }}"></label>
+  <label>Window seconds <input name="window_seconds" type="number" value="{{ settings.window_seconds }}"></label>
+  <label>Ban seconds <input name="ban_seconds" type="number" value="{{ settings.ban_seconds }}"></label>
+  <label>Cooldown seconds <input name="cooldown_seconds" type="number" value="{{ settings.cooldown_seconds }}"></label>
+  <label>Permanent after <input name="permanent_after" type="number" value="{{ settings.permanent_after }}"></label>
+  <button type="submit">Save thresholds</button>
+</form>
+<h2>Manual ban</h2>
+<form method="post" action="/bans">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input name="ip" placeholder="203.0.113.10" required>
+  <input name="reason" placeholder="reason" value="manual">
+  <input name="seconds" type="number" value="3600">
+  <label><input type="checkbox" name="permanent" value="yes"> Permanent</label>
+  <button type="submit">Ban</button>
+</form>
+<h2>History</h2>
+<table>
+  <thead><tr><th>Address</th><th>Source</th><th>Until</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for ban in bans %}
+    <tr id="ban-{{ ban.id }}">
+      <td>{{ ban.ip }}</td>
+      <td>{{ ban.source }} · {{ ban.reason }}</td>
+      <td>{{ "permanent" if ban.permanent else (ban.expires_at or "") }}</td>
+      <td>{{ "lifted" if ban.lifted_at else "active" }}</td>
+      <td>
+        {% if not ban.lifted_at %}
+        <form method="post" action="/bans/{{ ban.id }}/unban" hx-post="/bans/{{ ban.id }}/unban" hx-target="#ban-{{ ban.id }}" hx-swap="outerHTML">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="quiet" type="submit">Unban</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">No bans.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
