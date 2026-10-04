@@ -29,27 +29,85 @@ scripts/             install, uninstall, rollback, backup, restore
 tests/
 ```
 
-## Run
+## Setup from scratch (Docker)
+
+Use this path on a clean machine. It builds the image and serves the UI on port **9000**. The default nft backend stays disabled, so this does not change the host firewall.
+
+1. Install Docker Engine and the Compose plugin, then start the daemon.
+
+   ```bash
+   # Fedora / RHEL-like
+   sudo dnf install -y docker docker-compose-plugin
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker "$USER"
+   # log out and back in (or: newgrp docker)
+   ```
+
+   ```bash
+   # Debian / Ubuntu
+   sudo apt update
+   sudo apt install -y docker.io docker-compose-v2
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker "$USER"
+   # log out and back in (or: newgrp docker)
+   ```
+
+2. Get the source.
+
+   ```bash
+   git clone https://github.com/muerfox/Port-Warden.git
+   cd Port-Warden
+   ```
+
+3. (Recommended) Create secrets. Skip this only for a local trial; Compose then uses the built-in defaults.
+
+   ```bash
+   cp .env.example .env
+   # set at least:
+   #   PORT_WARDEN_SECRET_KEY=<long random string>
+   #   PORT_WARDEN_ADMIN_USERNAME=admin
+   #   PORT_WARDEN_ADMIN_PASSWORD=<12+ characters>
+   ```
+
+4. Build and start.
+
+   ```bash
+   mkdir -p data
+   docker compose up --build
+   # detached:
+   # docker compose up -d --build
+   ```
+
+5. Open the UI and sign in.
+
+   - URL: `http://127.0.0.1:9000/`
+   - Health: `curl -s http://127.0.0.1:9000/health`
+   - Trial login (no `.env`): `admin` / `portwarden-change-me`
+   - With `.env`: the username and password you set
+
+6. Stop.
+
+   ```bash
+   docker compose down
+   ```
+
+Host nftables apply, the root agent, rollback, backup, and honeypots are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before enforce mode.
+
+## Setup from scratch (Python, no Docker)
+
+Needs Python 3.12+.
 
 ```bash
+git clone https://github.com/muerfox/Port-Warden.git
+cd Port-Warden
 ./scripts/install.sh
-# edit .env: SECRET_KEY and ADMIN_PASSWORD (12+ characters)
+cp .env.example .env
+# edit PORT_WARDEN_SECRET_KEY and PORT_WARDEN_ADMIN_PASSWORD (12+)
+# keep PORT_WARDEN_BIND_HOST=127.0.0.1 and PORT_WARDEN_EXPOSE_PUBLIC=0
 .venv/bin/python -m app
 ```
 
-Open `http://127.0.0.1:8443/`. Health check: `GET /health`.
-
-Docker:
-
-```bash
-docker compose up --build
-```
-
-UI at `http://127.0.0.1:9000/` (default login `admin` / `portwarden-change-me`). Put real secrets in `.env`. Host agent, rollback, and backup are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before applying enforce mode.
-
-```bash
-.venv/bin/pytest
-```
+UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 ## Firewall behavior that matters
 
