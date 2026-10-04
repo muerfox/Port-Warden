@@ -40,11 +40,11 @@ docker compose up --build
 docker compose up -d --build
 ```
 
-UI: `http://127.0.0.1:9090/`. Login uses `PORT_WARDEN_ADMIN_*` from `.env`. The entrypoint owns `./data` for the app user, so a manual `chown` is not required.
+UI: `http://<host>:9090/` (all interfaces). Login uses `PORT_WARDEN_ADMIN_*` from `.env`. The entrypoint owns `./data` for the app user, so a manual `chown` is not required.
 
 Default Compose:
 
-- Publishes host port **9090** to the container listen port 9090
+- Publishes host port **9090** on **0.0.0.0** to the container listen port 9090
 - Accepts inbound TCP **80, 443, and 8080** before denylist, bans, and the enforce drop (`PORT_WARDEN_EXCLUDED_PORTS`)
 - Drops most capabilities, `no-new-privileges`, read-only root filesystem, memory and pid limits
 - Sets `PORT_WARDEN_NFT_BACKEND=disabled`

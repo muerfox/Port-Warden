@@ -31,7 +31,7 @@ tests/
 
 ## Setup from scratch (Docker)
 
-Use this path on a clean machine. It builds the image and serves the UI on port **9090**. The default nft backend stays disabled, so this does not change the host firewall. Inbound TCP 80, 443, and 8080 are excluded from the drop policy when a ruleset is later applied.
+Use this path on a clean machine. It builds the image and serves the UI on port **9090** on all interfaces (`0.0.0.0`). The default nft backend stays disabled, so this does not change the host firewall. Inbound TCP 80, 443, and 8080 are excluded from the drop policy when a ruleset is later applied.
 
 1. Install Docker Engine and the Compose plugin, then start the daemon.
 
@@ -84,7 +84,7 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
 
 5. Open the UI and sign in.
 
-   - URL: `http://127.0.0.1:9090/`
+   - URL: `http://<host>:9090/` (bound on all interfaces)
    - Health: `curl -s http://127.0.0.1:9090/health`
    - Login: username/password from `.env`
 

@@ -1,6 +1,6 @@
 # Build and serve the dashboard:
 #   docker compose up --build
-# UI: http://127.0.0.1:9090/
+# UI: http://<host>:9090/ (published on 0.0.0.0:9090)
 #
 # The API container cannot change host nftables. EXPOSE_PUBLIC applies only
 # inside the container network namespace; the host publish address below is
@@ -30,7 +30,7 @@ services:
       PORT_WARDEN_ADMIN_USERNAME: ${PORT_WARDEN_ADMIN_USERNAME:-admin}
       PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
     ports:
-      - "127.0.0.1:9090:9090"
+      - "0.0.0.0:9090:9090"
     volumes:
       - ./data:/var/lib/port-warden
     read_only: true
