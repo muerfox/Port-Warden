@@ -33,6 +33,7 @@ class Policy:
     deny_cidrs: list[str]
     ban_cidrs: list[str]
     rules: list[RuleView] = field(default_factory=list)
+    excluded_ports: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -179,6 +180,9 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
             f'        {family} saddr {shown} tcp dport {int(policy.ssh_port)} '
             f'accept comment "pw:management-ssh"'
         )
+    if policy.excluded_ports:
+        shown = ", ".join(str(int(port)) for port in policy.excluded_ports)
+        lines.append(f'        tcp dport {{ {shown} }} accept comment "pw:excluded-ports"')
     if allow_v4:
         lines.append('        ip saddr @allow_v4 accept comment "pw:allowlist"')
     if allow_v6:

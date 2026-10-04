@@ -16,7 +16,7 @@ Use this before exposing the dashboard beyond loopback or applying enforce mode.
 
 - [ ] Host install binds `127.0.0.1` or another private address
 - [ ] `expose_public` is false on the host
-- [ ] Docker publish is limited (default is host `:9000`); prefer binding `127.0.0.1:9000:8443` or put TLS in front
+- [ ] Docker publish is limited (default is host `:9090`); prefer binding `127.0.0.1:9090:9090` or put TLS in front
 - [ ] The Docker socket is not mounted into the API container
 - [ ] Default compose does not add `NET_ADMIN` and does not set `--privileged`
 

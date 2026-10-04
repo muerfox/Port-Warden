@@ -56,6 +56,18 @@ def test_public_bind_requires_explicit_flag():
     Settings(bind_host="0.0.0.0", expose_public=True, secret_key="x" * 16).assert_safe_bind()
 
 
+def test_csv_list_env_vars(monkeypatch):
+    monkeypatch.setenv("PORT_WARDEN_MANAGEMENT_CIDRS", "127.0.0.1/32,::1/128")
+    monkeypatch.setenv("PORT_WARDEN_REACHABILITY_TARGETS", "")
+    monkeypatch.setenv("PORT_WARDEN_ADMIN_PASSWORD", "x")
+    settings = Settings()
+    assert settings.management_cidrs == ["127.0.0.1/32", "::1/128"]
+    assert settings.reachability_targets == []
+    assert settings.excluded_ports == [80, 443, 8080]
+    monkeypatch.setenv("PORT_WARDEN_EXCLUDED_PORTS", "80,443,8080")
+    assert Settings().excluded_ports == [80, 443, 8080]
+
+
 def _load_decoy():
     path = Path(__file__).resolve().parents[1] / "honeypots" / "decoy.py"
     spec = importlib.util.spec_from_file_location("port_warden_decoy", path)

@@ -67,19 +67,19 @@ def test_denylist_cannot_cover_management(auth):
 
 def test_render_orders_rules_and_skips_expired():
     now = utcnow()
-    rendered = render_policy(
-        _policy(
-            rules=[
-                RuleView("later", "allow", "in", "tcp", None, None, "443", "", 50),
-                RuleView("sooner", "deny", "in", "tcp", "203.0.113.9/32", None, "25", "", 10),
-                RuleView("old", "deny", "in", "tcp", "203.0.113.8/32", None, "25", "", 1, True, now - timedelta(seconds=30)),
-            ]
-        ),
-        now,
-    )
+    rules = [
+        RuleView("later", "allow", "in", "tcp", None, None, "443", "", 50),
+        RuleView("sooner", "deny", "in", "tcp", "203.0.113.9/32", None, "25", "", 10),
+        RuleView("old", "deny", "in", "tcp", "203.0.113.8/32", None, "25", "", 1, True, now - timedelta(seconds=30)),
+    ]
+    rendered = render_policy(_policy(rules=rules), now)
     script = rendered.script
     assert "policy drop;" in script
     assert 'tcp dport 22 accept comment "pw:management-ssh"' in script
+    assert 'tcp dport { 80, 443, 8080 } accept comment "pw:excluded-ports"' not in script
+    kept = render_policy(_policy(rules=rules, excluded_ports=[80, 443, 8080]), now)
+    assert 'tcp dport { 80, 443, 8080 } accept comment "pw:excluded-ports"' in kept.script
+    assert kept.script.index("pw:excluded-ports") < kept.script.index("pw:sooner")
     assert "pw:old" not in script
     assert script.index("pw:sooner") < script.index("pw:later")
     assert_safe_script(script)

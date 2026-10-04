@@ -8,7 +8,8 @@ Port Warden is a single-host firewall desk. Desired state is stored in SQLite. n
 - The service is Python 3.12, FastAPI, SQLite, and server-rendered pages.
 - Default nft backend is `disabled`. Apply writes a snapshot and does not call `nft`.
 - The preferred way to change the host is `host-agent/agent.py`, a root helper on a Unix socket. The alternative is `nft_backend: local` in the host network namespace with `CAP_NET_ADMIN`.
-- The management UI binds to loopback unless `expose_public` is set. Docker Compose publishes `127.0.0.1:8443` and sets that flag only inside the container network namespace.
+- The management UI binds to loopback unless `expose_public` is set. Docker Compose publishes `127.0.0.1:9090` and sets that flag only inside the container network namespace.
+- Inbound TCP ports in `excluded_ports` (default 80, 443, 8080) are accepted before denylist, bans, and the enforce drop.
 
 ## Components
 

@@ -1,6 +1,6 @@
 # Build and serve the dashboard:
 #   docker compose up --build
-# UI: http://127.0.0.1:9000/
+# UI: http://127.0.0.1:9090/
 #
 # The API container cannot change host nftables. EXPOSE_PUBLIC applies only
 # inside the container network namespace; the host publish address below is
@@ -18,7 +18,8 @@ services:
       - .env
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
-      PORT_WARDEN_BIND_PORT: "8443"
+      PORT_WARDEN_BIND_PORT: "9090"
+      PORT_WARDEN_EXCLUDED_PORTS: "80,443,8080"
       PORT_WARDEN_EXPOSE_PUBLIC: "1"
       PORT_WARDEN_NFT_BACKEND: disabled
       PORT_WARDEN_DATA_DIR: /var/lib/port-warden
@@ -29,7 +30,7 @@ services:
       PORT_WARDEN_ADMIN_USERNAME: ${PORT_WARDEN_ADMIN_USERNAME:-admin}
       PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
     ports:
-      - "127.0.0.1:9000:8443"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./data:/var/lib/port-warden
     read_only: true
@@ -48,7 +49,7 @@ services:
     pids_limit: 128
     mem_limit: 256m
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8443/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/health')"]
       interval: 30s
       timeout: 5s
       retries: 3

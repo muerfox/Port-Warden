@@ -476,6 +476,7 @@ def firewall_page(request: Request, db: Session = Depends(db_session)):
         error="",
         management=request.app.state.settings.management_cidrs,
         ssh_port=request.app.state.settings.ssh_port,
+        excluded_ports=request.app.state.settings.excluded_ports,
     )
 
 
@@ -501,6 +502,7 @@ def firewall_preview(request: Request, db: Session = Depends(db_session), csrf_t
         error="",
         management=request.app.state.settings.management_cidrs,
         ssh_port=request.app.state.settings.ssh_port,
+        excluded_ports=request.app.state.settings.excluded_ports,
     )
 
 

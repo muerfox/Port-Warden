@@ -31,7 +31,7 @@ tests/
 
 ## Setup from scratch (Docker)
 
-Use this path on a clean machine. It builds the image and serves the UI on port **9000**. The default nft backend stays disabled, so this does not change the host firewall.
+Use this path on a clean machine. It builds the image and serves the UI on port **9090**. The default nft backend stays disabled, so this does not change the host firewall. Inbound TCP 80, 443, and 8080 are excluded from the drop policy when a ruleset is later applied.
 
 1. Install Docker Engine and the Compose plugin, then start the daemon.
 
@@ -84,8 +84,8 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
 
 5. Open the UI and sign in.
 
-   - URL: `http://127.0.0.1:9000/`
-   - Health: `curl -s http://127.0.0.1:9000/health`
+   - URL: `http://127.0.0.1:9090/`
+   - Health: `curl -s http://127.0.0.1:9090/health`
    - Login: username/password from `.env`
 
 6. Stop.
@@ -116,6 +116,7 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 - Named rules support address, protocol, ports, direction, comment, expiry, and priority.
 - Presets fill a form. They do not open ports.
+- Inbound TCP 80, 443, and 8080 are excluded from the drop: they are accepted before denylist, bans, and enforce mode. Change them with `PORT_WARDEN_EXCLUDED_PORTS`.
 - Allowlist and management addresses cannot be banned.
 - Apply from an SSH client that the new policy would drop requires the confirmation phrase.
 - If `nft` fails after a previous good apply, the last good script is installed again.

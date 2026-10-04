@@ -10,6 +10,10 @@ management_cidrs:
   - 127.0.0.1/32
   - ::1/128
 ssh_port: 22
+excluded_ports:
+  - 80
+  - 443
+  - 8080
 nft_backend: disabled
 log_retention_days: 30
 log_max_bytes: 5000000

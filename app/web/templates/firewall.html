@@ -2,6 +2,7 @@
 {% block body %}
 <p class="lede">Preview shows the nftables transaction. Apply is a separate confirmation. With the default backend, apply only stores a snapshot.</p>
 <p>Management SSH stays open for {{ management | join(", ") }} on tcp/{{ ssh_port }}.</p>
+<p>Excluded inbound TCP ports stay open ahead of denylist, bans, and the default drop: {{ excluded_ports | join(", ") }}.</p>
 <p>Installed: {{ "yes" if status_info.installed else "no" }}. Drift: {{ "yes" if status_info.drift else "no" }}. Backend: {{ status_info.backend }}.</p>
 {% for warning in status_info.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
 <form method="post" action="/firewall/mode">

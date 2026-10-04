@@ -118,6 +118,7 @@ class FirewallEngine:
             mode=mode,
             management_cidrs=list(self.settings.management_cidrs),
             ssh_port=self.settings.ssh_port,
+            excluded_ports=list(self.settings.excluded_ports),
             allow_cidrs=allow,
             deny_cidrs=deny,
             ban_cidrs=bans,

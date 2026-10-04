@@ -3,11 +3,11 @@ from __future__ import annotations
 import ipaddress
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_SECRET = "change-me-in-production-use-long-random"
 
@@ -18,6 +18,17 @@ def _csv(value: object) -> list[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+def _port_list(value: object) -> list[int]:
+    ports: list[int] = []
+    for item in _csv(value):
+        port = int(item)
+        if not 1 <= port <= 65535:
+            raise ValueError(f"port {port} out of range")
+        if port not in ports:
+            ports.append(port)
+    return ports
 
 
 class Settings(BaseSettings):
@@ -44,7 +55,15 @@ class Settings(BaseSettings):
     agent_token_file: str = "/etc/port-warden/agent.token"
 
     firewall_mode: Literal["enforce", "monitor"] = "enforce"
-    management_cidrs: list[str] = Field(default_factory=lambda: ["127.0.0.1/32", "::1/128"])
+    # NoDecode: env is CSV (127.0.0.1/32,::1/128), not JSON. Without it,
+    # pydantic-settings fails before the CSV validator runs.
+    management_cidrs: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["127.0.0.1/32", "::1/128"]
+    )
+    # Inbound TCP ports accepted before denylist, bans, and the enforce drop.
+    excluded_ports: Annotated[list[int], NoDecode] = Field(
+        default_factory=lambda: [80, 443, 8080]
+    )
     ssh_port: int = 22
 
     log_retention_days: int = 30
@@ -58,7 +77,7 @@ class Settings(BaseSettings):
     auth_log_path: str = ""
     ban_auto_apply: bool = False
 
-    reachability_targets: list[str] = Field(default_factory=list)
+    reachability_targets: Annotated[list[str], NoDecode] = Field(default_factory=list)
     login_rate_limit: int = 5
     login_rate_window: int = 300
 
@@ -66,6 +85,11 @@ class Settings(BaseSettings):
     @classmethod
     def _split_csv(cls, value: object) -> list[str]:
         return _csv(value)
+
+    @field_validator("excluded_ports", mode="before")
+    @classmethod
+    def _split_ports(cls, value: object) -> list[int]:
+        return _port_list(value)
 
     @field_validator("ssh_port")
     @classmethod
