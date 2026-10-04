@@ -12,9 +12,10 @@ services:
   port-warden:
     build: .
     image: port-warden:local
+    # String path only — older Compose rejects the {path, required} object form.
+    # Create .env before up (cp .env.example .env). Compose also reads .env for ${...} interpolation.
     env_file:
-      - path: .env
-        required: false
+      - .env
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
       PORT_WARDEN_BIND_PORT: "8443"

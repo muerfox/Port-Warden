@@ -32,15 +32,15 @@ PORT_WARDEN_NFT_BACKEND=agent
 ## Docker
 
 ```bash
-# Optional: copy and edit secrets
+# Required: Compose env_file is a path string (compatible with older docker compose).
 cp .env.example .env
-
+# edit secrets, then:
 docker compose up --build
 # or detached:
 docker compose up -d --build
 ```
 
-UI: `http://127.0.0.1:9000/`. Without `.env`, Compose uses the trial admin password `portwarden-change-me`. Change it before any real use. The entrypoint owns `./data` for the app user, so a manual `chown` is not required.
+UI: `http://127.0.0.1:9000/`. Login uses `PORT_WARDEN_ADMIN_*` from `.env`. The entrypoint owns `./data` for the app user, so a manual `chown` is not required.
 
 Default Compose:
 

@@ -59,7 +59,7 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
    cd Port-Warden
    ```
 
-3. (Recommended) Create secrets. Skip this only for a local trial; Compose then uses the built-in defaults.
+3. Create `.env` (required — older Compose only accepts a string `env_file` path, so the file must exist).
 
    ```bash
    cp .env.example .env
@@ -67,6 +67,10 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
    #   PORT_WARDEN_SECRET_KEY=<long random string>
    #   PORT_WARDEN_ADMIN_USERNAME=admin
    #   PORT_WARDEN_ADMIN_PASSWORD=<12+ characters>
+   #
+   # Local trial example:
+   #   PORT_WARDEN_SECRET_KEY=compose-dev-secret-change-me-please
+   #   PORT_WARDEN_ADMIN_PASSWORD=portwarden-change-me
    ```
 
 4. Build and start.
@@ -82,8 +86,7 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
 
    - URL: `http://127.0.0.1:9000/`
    - Health: `curl -s http://127.0.0.1:9000/health`
-   - Trial login (no `.env`): `admin` / `portwarden-change-me`
-   - With `.env`: the username and password you set
+   - Login: username/password from `.env`
 
 6. Stop.
 
