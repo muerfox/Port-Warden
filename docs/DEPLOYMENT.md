@@ -34,10 +34,9 @@ PORT_WARDEN_NFT_BACKEND=agent
 ```bash
 # Required: Compose env_file is a path string (compatible with older docker compose).
 cp .env.example .env
-# If sshd listens on 2222:
-#   PORT_WARDEN_SSH_PORT=2222
 # Before the first enforce Apply, add your admin CIDR:
 #   PORT_WARDEN_MANAGEMENT_CIDRS=<your-ip>/32,127.0.0.1/32,::1/128
+# Service ports are chosen in the Ports panel after discovery (Keep open / Set as SSH).
 docker compose up --build
 # or detached:
 docker compose up -d --build
@@ -51,10 +50,10 @@ Default Compose:
 - Adds `CAP_NET_ADMIN` (not `--privileged`) and keeps it across the uid drop via `setpriv`
 - Sets `PORT_WARDEN_NFT_BACKEND=local` and `PORT_WARDEN_HOST_NETWORK=1`
 - Listens on HTTPS **9090** on `0.0.0.0`
-- Accepts inbound TCP **80, 443, 8080, 9090** before denylist, bans, and the enforce drop (`PORT_WARDEN_EXCLUDED_PORTS`)
-- Drops other capabilities, `no-new-privileges`, read-only root filesystem, memory and pid limits
+- Discovers host listeners on the Ports panel; open ports and management SSH are chosen there
+- Drops other capabilities, read-only root filesystem, memory and pid limits
 
-After Preview/Apply in enforce mode, `table inet port_warden` runs at input priority `-10` and sits in front of later filters for unmatched traffic. Management SSH stays open only for `PORT_WARDEN_MANAGEMENT_CIDRS` on `PORT_WARDEN_SSH_PORT`.
+After Preview/Apply in enforce mode, `table inet port_warden` runs at input priority `-10` and sits in front of later filters for unmatched traffic. Management SSH stays open only for `PORT_WARDEN_MANAGEMENT_CIDRS` on the SSH port you marked in the panel.
 
 Dashboard-only (no host firewall): `docker compose -f docker-compose.dashboard.yml up --build`.
 

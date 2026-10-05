@@ -1,22 +1,62 @@
 {% extends "base.html" %}
 {% block body %}
-<p class="note">{{ note }} Port Warden does not scan the internet. A reachability check runs only for an address you configured.</p>
+<p class="lede">Port Warden discovers listening sockets on this host. Keep open the services you want reachable, mark your real SSH port, then Preview/Apply on the Firewall page. You do not need to list ports in <code>.env</code>.</p>
+<p class="note">{{ note }}</p>
 {% if warning %}<p class="warning">{{ warning }}</p>{% endif %}
-<p>Management SSH port: <code>{{ ssh_port }}</code>. Excluded inbound TCP ports: <code>{{ excluded_ports | join(", ") }}</code>.</p>
-{% if not targets %}<p>No reachability targets are configured.</p>{% else %}<p>Configured targets: {{ targets | join(", ") }}</p>{% endif %}
+<p>Management SSH: <code>tcp/{{ ssh_port }}</code> for management CIDRs. Open ports after Apply: <code>{{ open_ports | join(", ") or "(UI bind only)" }}</code>.</p>
+{% if not targets %}<p>No optional reachability targets are configured.</p>{% else %}<p>Configured targets: {{ targets | join(", ") }}</p>{% endif %}
 <table>
-  <thead><tr><th>Proto</th><th>Address</th><th>Port</th><th>Scope</th></tr></thead>
+  <thead>
+    <tr>
+      <th>Proto</th>
+      <th>Port</th>
+      <th>Addresses</th>
+      <th>Scope</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
   <tbody>
   {% for row in listeners %}
     <tr>
       <td>{{ row.protocol }}</td>
-      <td>{{ row.address }}</td>
-      <td>{{ row.port }}{% if row.port == ssh_port %} · management SSH{% endif %}{% if row.port in excluded_ports %} · excluded{% endif %}</td>
+      <td>{{ row.port }}</td>
+      <td><code>{{ row.address_text }}</code></td>
       <td>{{ row.scope_label }}{% if row.possibly_public %} · possibly reachable{% endif %}</td>
+      <td>{{ row.status }}</td>
+      <td class="actions">
+        {% if row.protocol == "tcp" and not row.is_ui %}
+          {% if not row.is_open %}
+          <form method="post" action="/ports/keep-open">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="port" value="{{ row.port }}">
+            <button type="submit">Keep open</button>
+          </form>
+          {% else %}
+          <form method="post" action="/ports/close">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="port" value="{{ row.port }}">
+            <button type="submit">Drop in enforce</button>
+          </form>
+          {% endif %}
+          {% if not row.is_ssh %}
+          <form method="post" action="/ports/management-ssh">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="port" value="{{ row.port }}">
+            <button type="submit">Set as SSH</button>
+          </form>
+          {% endif %}
+        {% elif row.is_ui %}
+          <span class="note">protected</span>
+        {% else %}
+          <span class="note">UDP: use a named rule if needed</span>
+        {% endif %}
+      </td>
     </tr>
   {% else %}
-    <tr><td colspan="4">No listeners reported.</td></tr>
+    <tr><td colspan="6">No listeners reported. Host network mode is required to see host services.</td></tr>
   {% endfor %}
   </tbody>
 </table>
+<p class="note">Changes here update desired policy only. Open Firewall → Preview → Apply to install them on the host.</p>
 {% endblock %}

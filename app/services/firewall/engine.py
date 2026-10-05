@@ -55,6 +55,7 @@ def set_setting(db: Session, key: str, value: str) -> None:
         db.add(AppSetting(key=key, value=value))
     else:
         row.value = value
+    db.flush()
 
 
 class FirewallEngine:
@@ -114,11 +115,13 @@ class FirewallEngine:
             )
             for row in db.scalars(select(Rule)).all()
         ]
+        from app.services.inventory.workspace import effective_open_ports, effective_ssh_port
+
         return Policy(
             mode=mode,
             management_cidrs=list(self.settings.management_cidrs),
-            ssh_port=self.settings.ssh_port,
-            excluded_ports=list(self.settings.excluded_ports),
+            ssh_port=effective_ssh_port(db, self.settings),
+            excluded_ports=effective_open_ports(db, self.settings),
             allow_cidrs=allow,
             deny_cidrs=deny,
             ban_cidrs=bans,

@@ -18,6 +18,14 @@ from app.services.events import audit_dict, event_dict, record_audit
 from app.services.firewall.presets import PRESETS, get_preset
 from app.services.honeypot_store import read_telemetry, write_desired
 from app.services.inventory.ports import REACHABILITY_NOTE, inventory_warning, read_host_listeners
+from app.services.inventory.workspace import (
+    close_port,
+    effective_open_ports,
+    effective_ssh_port,
+    keep_port_open,
+    panel_rows,
+    set_management_ssh,
+)
 from app.services.records import add_entry, bf_config, create_ban, create_rule, lift_ban, save_bf_config_fields
 from app.services.firewall.backend import NftError
 from app.services.firewall.engine import LockoutError, set_setting
@@ -140,12 +148,87 @@ def ports(request: Request, db: Session = Depends(db_session)):
         request,
         "ports.html",
         session,
-        listeners=read_host_listeners(),
+        listeners=panel_rows(db, settings),
         note=REACHABILITY_NOTE,
         warning=inventory_warning(host_network=settings.host_network, nft_backend=settings.nft_backend),
         targets=settings.reachability_targets,
-        ssh_port=settings.ssh_port,
-        excluded_ports=settings.excluded_ports,
+        ssh_port=effective_ssh_port(db, settings),
+        open_ports=effective_open_ports(db, settings),
+    )
+
+
+@router.post("/ports/keep-open")
+def ports_keep_open(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+    port: int = Form(...),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        keep_port_open(db, request.app.state.settings, port)
+    except ValueError as exc:
+        return _redirect("/ports", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="port_keep_open",
+        target=str(port),
+        src_ip=client_ip(request),
+    )
+    return _redirect("/ports", f"Port {port} will stay open after Apply.")
+
+
+@router.post("/ports/close")
+def ports_close(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+    port: int = Form(...),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        close_port(db, request.app.state.settings, port)
+    except ValueError as exc:
+        return _redirect("/ports", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="port_close",
+        target=str(port),
+        src_ip=client_ip(request),
+    )
+    return _redirect("/ports", f"Port {port} will drop in enforce after Apply.")
+
+
+@router.post("/ports/management-ssh")
+def ports_management_ssh(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+    port: int = Form(...),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        set_management_ssh(db, port)
+    except ValueError as exc:
+        return _redirect("/ports", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="port_management_ssh",
+        target=str(port),
+        src_ip=client_ip(request),
+    )
+    return _redirect(
+        "/ports",
+        f"Port {port} is management SSH for management CIDRs only. Use Keep open if the world should reach it too.",
     )
 
 
@@ -479,8 +562,8 @@ def firewall_page(request: Request, db: Session = Depends(db_session)):
         preview=None,
         error="",
         management=request.app.state.settings.management_cidrs,
-        ssh_port=request.app.state.settings.ssh_port,
-        excluded_ports=request.app.state.settings.excluded_ports,
+        ssh_port=effective_ssh_port(db, request.app.state.settings),
+        open_ports=effective_open_ports(db, request.app.state.settings),
     )
 
 
@@ -505,8 +588,8 @@ def firewall_preview(request: Request, db: Session = Depends(db_session), csrf_t
         preview=preview,
         error="",
         management=request.app.state.settings.management_cidrs,
-        ssh_port=request.app.state.settings.ssh_port,
-        excluded_ports=request.app.state.settings.excluded_ports,
+        ssh_port=effective_ssh_port(db, request.app.state.settings),
+        open_ports=effective_open_ports(db, request.app.state.settings),
     )
 
 

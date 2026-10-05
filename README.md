@@ -12,7 +12,7 @@ Default Docker Compose uses the **host network** and the **local** nft backend s
 | App | Python 3.12, FastAPI, SQLite, server-rendered UI |
 | Docker UI | `https://0.0.0.0:9090/` (self-signed, 10-year cert from image build) |
 | Enforcement | Local nft on host network after Preview/Apply |
-| Excluded ports | TCP 80, 443, 8080, 9090 (accepted before the drop) |
+| Open ports | Discovered on the Ports panel; keep open / set SSH there (UI bind stays open) |
 | Brute force | 5 failures in 10 minutes, 1 hour ban, no automatic permanent bans, no automatic nft update |
 | Honeypots | Off |
 
@@ -60,7 +60,7 @@ Use this path on a clean machine. The image build creates a self-signed certific
    cd Port-Warden
    ```
 
-3. Create `.env` and set SSH / management before the first enforce Apply.
+3. Create `.env` (secrets and your admin CIDR). You do **not** list service ports here.
 
    ```bash
    cp .env.example .env
@@ -68,10 +68,7 @@ Use this path on a clean machine. The image build creates a self-signed certific
    #   PORT_WARDEN_SECRET_KEY=<long random string>
    #   PORT_WARDEN_ADMIN_USERNAME=admin
    #   PORT_WARDEN_ADMIN_PASSWORD=<12+ characters>
-   #
-   # if sshd listens on 2222:
-   #   PORT_WARDEN_SSH_PORT=2222
-   # put your admin source address/CIDR here so enforce mode keeps SSH:
+   # put your admin source so management SSH stays reachable after Apply:
    #   PORT_WARDEN_MANAGEMENT_CIDRS=203.0.113.10/32,127.0.0.1/32,::1/128
    ```
 
@@ -89,14 +86,14 @@ Use this path on a clean machine. The image build creates a self-signed certific
    - URL: `https://<host>:9090/` (self-signed)
    - Health: `curl -sk https://127.0.0.1:9090/health`
    - Login: username/password from `.env`
-   - Ports page should list host listeners, including SSH on 2222 when that is open on the host
+   - Ports page lists host listeners automatically (for example SSH on 2222)
 
 6. Put the firewall in front of the host.
 
-   1. Confirm Ports shows the host listeners you expect.
-   2. Add allow rules for any service that should stay reachable beyond excluded ports and management SSH.
+   1. Open **Ports**. Confirm it shows host listeners.
+   2. For each service that should stay reachable, click **Keep open**. For sshd click **Set as SSH**.
    3. Firewall → Preview → read the lockout warning → Apply.
-   4. Enforce mode drops inbound traffic that is not established, loopback, management SSH, allowlisted, excluded, or matched by an allow rule.
+   4. Enforce mode drops inbound traffic that is not established, loopback, management SSH, allowlisted, kept open, or matched by an allow rule.
 
 7. Stop.
 
@@ -126,8 +123,7 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 - Named rules support address, protocol, ports, direction, comment, expiry, and priority.
 - Presets fill a form. They do not open ports.
-- Inbound TCP 80, 443, 8080, and 9090 are excluded from the drop by default. Change them with `PORT_WARDEN_EXCLUDED_PORTS`.
-- Set `PORT_WARDEN_SSH_PORT` to the real sshd port (22 or 2222). Management CIDRs keep that port open for those sources only.
+- Open ports and the management SSH port are chosen on the Ports panel from discovered listeners. The UI bind port stays open automatically.
 - Allowlist and management addresses cannot be banned.
 - Apply from an SSH client that the new policy would drop requires the confirmation phrase.
 - If `nft` fails after a previous good apply, the last good script is installed again.

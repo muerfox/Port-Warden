@@ -121,6 +121,15 @@ input, select, button, textarea {
   border-radius: 2px;
 }
 
+td.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+td.actions form { margin: 0; }
+
 button, .button {
   background: var(--teal);
   color: white;

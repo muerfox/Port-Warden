@@ -64,10 +64,9 @@ class Settings(BaseSettings):
     management_cidrs: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["127.0.0.1/32", "::1/128"]
     )
-    # Inbound TCP ports accepted before denylist, bans, and the enforce drop.
-    excluded_ports: Annotated[list[int], NoDecode] = Field(
-        default_factory=lambda: [80, 443, 8080, 9090]
-    )
+    # Optional first-run seed only. Prefer choosing open ports in the Ports panel.
+    # The UI bind_port is always kept open even when this list is empty.
+    excluded_ports: Annotated[list[int], NoDecode] = Field(default_factory=list)
     ssh_port: int = 22
 
     log_retention_days: int = 30

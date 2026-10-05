@@ -8,8 +8,8 @@ Port Warden is a single-host firewall desk. Desired state is stored in SQLite. n
 - The service is Python 3.12, FastAPI, SQLite, and server-rendered pages.
 - Default Docker Compose uses host network, `nft_backend: local`, and `CAP_NET_ADMIN` so inventory and Apply operate on the host. A bridge-only dashboard file remains for non-enforcing installs. The host-agent Unix helper is still available when you prefer not to give the API `NET_ADMIN`.
 - The management UI binds to loopback unless `expose_public` is set. Docker Compose listens on `0.0.0.0:9090` as HTTPS with a 10-year self-signed certificate from the image build.
-- Inbound TCP ports in `excluded_ports` (default 80, 443, 8080, 9090) are accepted before denylist, bans, and the enforce drop.
-- `ssh_port` is the management SSH destination port (set to 2222 when sshd listens there).
+- Listening ports are discovered from the host. Operators keep ports open or mark management SSH in the Ports panel; those choices are stored in SQLite and rendered into the nftables policy. The UI bind port is always kept open.
+- Env `excluded_ports` / `ssh_port` are optional first-run seeds only.
 
 ## Components
 

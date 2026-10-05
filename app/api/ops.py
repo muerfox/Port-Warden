@@ -21,6 +21,7 @@ from app.services.inventory.ports import (
     inventory_warning,
     read_host_listeners,
 )
+from app.services.inventory.workspace import effective_open_ports, effective_ssh_port, panel_rows
 from app.services.records import bf_config, create_ban, lift_ban, save_bf_config_fields
 
 router = APIRouter(tags=["ops"])
@@ -172,12 +173,13 @@ def ports(request: Request, db: Session = Depends(db_session)):
     require_user(request, db)
     settings = request.app.state.settings
     return {
-        "listeners": read_host_listeners(),
+        "listeners": panel_rows(db, settings),
+        "raw_listeners": read_host_listeners(),
         "note": REACHABILITY_NOTE,
         "warning": inventory_warning(host_network=settings.host_network, nft_backend=settings.nft_backend),
         "host_network": settings.host_network,
-        "ssh_port": settings.ssh_port,
-        "excluded_ports": settings.excluded_ports,
+        "ssh_port": effective_ssh_port(db, settings),
+        "open_ports": effective_open_ports(db, settings),
     }
 
 

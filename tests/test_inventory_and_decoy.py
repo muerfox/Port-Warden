@@ -14,6 +14,14 @@ from app.services.inventory.ports import (
     parse_proc_net,
     parse_ss,
 )
+from app.services.inventory.workspace import (
+    close_port,
+    consolidate_listeners,
+    effective_open_ports,
+    effective_ssh_port,
+    keep_port_open,
+    set_management_ssh,
+)
 
 
 def test_ss_and_proc_classification():
@@ -80,13 +88,73 @@ def test_csv_list_env_vars(monkeypatch):
     settings = Settings()
     assert settings.management_cidrs == ["127.0.0.1/32", "::1/128"]
     assert settings.reachability_targets == []
-    assert settings.excluded_ports == [80, 443, 8080, 9090]
-    monkeypatch.setenv("PORT_WARDEN_EXCLUDED_PORTS", "80,443,8080,9090")
-    assert Settings().excluded_ports == [80, 443, 8080, 9090]
+    assert settings.excluded_ports == []
+    monkeypatch.setenv("PORT_WARDEN_EXCLUDED_PORTS", "80,443")
+    assert Settings().excluded_ports == [80, 443]
     warn = inventory_warning(host_network=False, nft_backend="disabled")
     assert "not in the host network" in warn
     host_warn = inventory_warning(host_network=True, nft_backend="local")
     assert "Host network is enabled" in host_warn
+
+
+def test_ports_panel_keeps_discovered_ports(settings, app):
+    settings.bind_port = 9090
+    db = app.state.session_factory()
+    try:
+        assert effective_open_ports(db, settings) == [9090]
+        keep_port_open(db, settings, 2222)
+        keep_port_open(db, settings, 443)
+        db.commit()
+        assert effective_open_ports(db, settings) == [443, 2222, 9090]
+        set_management_ssh(db, 2222)
+        db.commit()
+        assert effective_ssh_port(db, settings) == 2222
+        close_port(db, settings, 443)
+        db.commit()
+        assert effective_open_ports(db, settings) == [2222, 9090]
+        with pytest.raises(ValueError):
+            close_port(db, settings, 9090)
+        merged = consolidate_listeners(
+            [
+                {
+                    "protocol": "tcp",
+                    "address": "0.0.0.0",
+                    "port": 2222,
+                    "scope": "all_interfaces",
+                    "scope_label": "all",
+                    "possibly_public": True,
+                },
+                {
+                    "protocol": "tcp",
+                    "address": "::",
+                    "port": 2222,
+                    "scope": "all_interfaces",
+                    "scope_label": "all",
+                    "possibly_public": True,
+                },
+            ]
+        )
+        assert len(merged) == 1
+        assert merged[0]["port"] == 2222
+    finally:
+        db.close()
+
+
+def test_ports_panel_actions_via_ui(auth, app):
+    app.state.settings.bind_port = 9090
+    page = auth.get("/ports")
+    assert page.status_code == 200
+    assert b"Keep open" in page.content or b"listeners" in page.content or b"No listeners" in page.content
+    keep = auth.post("/ports/keep-open", data={"port": "2222", "csrf_token": auth.headers["X-CSRF-Token"]})
+    assert keep.status_code in {302, 303}
+    ssh = auth.post("/ports/management-ssh", data={"port": "2222", "csrf_token": auth.headers["X-CSRF-Token"]})
+    assert ssh.status_code in {302, 303}
+    db = app.state.session_factory()
+    try:
+        assert 2222 in effective_open_ports(db, app.state.settings)
+        assert effective_ssh_port(db, app.state.settings) == 2222
+    finally:
+        db.close()
 
 
 def _load_decoy():
