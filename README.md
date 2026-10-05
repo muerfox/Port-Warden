@@ -2,7 +2,7 @@
 
 Port Warden is a defensive host firewall desk for a Linux server you administer. It keeps desired nftables policy in SQLite, shows host listening ports, records JSON events, and can temporarily ban SSH password-guessing. Honeypots are opt-in and do not run commands.
 
-Default Docker Compose uses the **host network** and the **local** nft backend so inventory sees host listeners (including SSH on 2222) and Apply installs `table inet port_warden` in front of inbound host traffic. Preview and confirm are still required before Apply. It is not `--privileged`.
+Default Docker Compose uses the **host network**, **host PID** (`pid: host`), and the **local** nft backend so inventory sees host listeners and host process names (including SSH on 2222) and Apply installs `table inet port_warden` in front of inbound host traffic. Preview and confirm are still required before Apply. It is not `--privileged`.
 
 ## Defaults
 
@@ -25,14 +25,14 @@ app/                 API, UI, firewall, bans, inventory, traffic graphs
 honeypots/decoy.py   low-interaction SSH and HTTP decoys
 host-agent/          optional root helper that applies only this table
 docs/                architecture, threat model, API, deployment, checklist
-docker-compose.yml   host network + NET_ADMIN + local nft
+docker-compose.yml   host network + host PID + NET_ADMIN + local nft
 scripts/             install, uninstall, rollback, backup, restore
 tests/
 ```
 
 ## Setup from scratch (Docker)
 
-Use this path on a clean machine. The image build creates a self-signed certificate valid for 10 years and serves HTTPS on port **9090**. Compose shares the host network namespace so the Ports page lists host listeners and Apply can install the host firewall table.
+Use this path on a clean machine. The image build creates a self-signed certificate valid for 10 years and serves HTTPS on port **9090**. Compose shares the host network and host PID namespaces so the Ports page lists host listeners with host process names and Apply can install the host firewall table.
 
 1. Install Docker Engine and the Compose plugin, then start the daemon.
 

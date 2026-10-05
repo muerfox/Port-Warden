@@ -175,7 +175,11 @@ def ports(request: Request, db: Session = Depends(db_session)):
         session,
         listeners=panel_rows(db, settings),
         note=REACHABILITY_NOTE,
-        warning=inventory_warning(host_network=settings.host_network, nft_backend=settings.nft_backend),
+        warning=inventory_warning(
+            host_network=settings.host_network,
+            nft_backend=settings.nft_backend,
+            host_pid=settings.host_pid,
+        ),
         targets=settings.reachability_targets,
         ssh_port=effective_ssh_port(db, settings),
         open_ports=effective_open_ports(db, settings),

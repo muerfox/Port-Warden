@@ -46,9 +46,9 @@ UI: `https://<host>:9090/` (all interfaces). The image build writes a self-signe
 
 Default Compose:
 
-- Uses **host network** so Ports shows host listeners (including SSH on 2222) and nftables changes the host
+- Uses **host network** and **host PID** (`pid: host`) so Ports shows host listeners and real host processes (sshd, nginx, …), and nftables changes the host
 - Adds `CAP_NET_ADMIN` (not `--privileged`) and keeps it across the uid drop via `setpriv`
-- Sets `PORT_WARDEN_NFT_BACKEND=local` and `PORT_WARDEN_HOST_NETWORK=1`
+- Sets `PORT_WARDEN_NFT_BACKEND=local`, `PORT_WARDEN_HOST_NETWORK=1`, and `PORT_WARDEN_HOST_PID=1`
 - Listens on HTTPS **9090** on `0.0.0.0`
 - Discovers host listeners on the Ports panel; open ports and management SSH are chosen there
 - Drops other capabilities, read-only root filesystem, memory and pid limits

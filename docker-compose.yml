@@ -2,9 +2,9 @@
 #   docker compose up --build
 # UI: https://<host>:9090/ (self-signed cert from image build)
 #
-# This service uses the host network namespace and CAP_NET_ADMIN so inventory
-# sees host listeners (for example SSH on 2222) and Apply installs
-# table inet port_warden in front of the host input path.
+# This service uses the host network and host PID namespaces plus CAP_NET_ADMIN
+# so inventory sees host listeners and real host processes (sshd, nginx, …),
+# and Apply installs table inet port_warden in front of the host input path.
 # It is not --privileged. Preview/confirm is still required before Apply.
 #
 # Before the first enforce Apply, put your admin CIDR in
@@ -20,11 +20,15 @@ services:
     env_file:
       - .env
     network_mode: host
+    # Required to resolve host process names. Without this, ss/proc only see
+    # the container PID namespace (often python as pid 1).
+    pid: host
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
       PORT_WARDEN_BIND_PORT: "9090"
       PORT_WARDEN_EXPOSE_PUBLIC: "1"
       PORT_WARDEN_HOST_NETWORK: "1"
+      PORT_WARDEN_HOST_PID: "1"
       PORT_WARDEN_NFT_BACKEND: local
       PORT_WARDEN_RESTORE_ON_START: "1"
       PORT_WARDEN_MANAGEMENT_CIDRS: ${PORT_WARDEN_MANAGEMENT_CIDRS:-127.0.0.1/32,::1/128}

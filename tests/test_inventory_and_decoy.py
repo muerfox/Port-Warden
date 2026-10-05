@@ -104,8 +104,14 @@ def test_csv_list_env_vars(monkeypatch):
     assert Settings().excluded_ports == [80, 443]
     warn = inventory_warning(host_network=False, nft_backend="disabled")
     assert "not in the host network" in warn
-    host_warn = inventory_warning(host_network=True, nft_backend="local")
-    assert "Host network is enabled" in host_warn
+    host_warn = inventory_warning(host_network=True, nft_backend="local", host_pid=True)
+    assert "Host network and host PID" in host_warn
+    monkeypatch.setattr(
+        "app.services.inventory.ports.host_pid_namespace",
+        lambda: False,
+    )
+    pid_warn = inventory_warning(host_network=True, nft_backend="local", host_pid=False)
+    assert "container PID" in pid_warn
 
 
 def test_ports_panel_keeps_discovered_ports(settings, app):

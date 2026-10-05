@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     nft_bin: str = "nft"
     # True when the process shares the host network namespace (Compose host mode).
     host_network: bool = False
+    # True when the process shares the host PID namespace (Compose pid: host).
+    # Needed so Ports shows host sshd/nginx/… instead of container python.
+    host_pid: bool = False
     agent_socket: str = "/run/port-warden/apply.sock"
     agent_token_file: str = "/etc/port-warden/agent.token"
 

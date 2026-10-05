@@ -14,6 +14,7 @@ ssh_port: 22
 excluded_ports: []
 nft_backend: local
 host_network: true
+host_pid: true
 log_retention_days: 30
 log_max_bytes: 5000000
 bf_threshold: 5

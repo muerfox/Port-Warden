@@ -212,6 +212,19 @@ def inode_process_map() -> dict[int, tuple[str, int]]:
     return found
 
 
+def host_pid_namespace() -> bool:
+    """True when /proc/1 looks like host init (systemd/init), not the container entrypoint."""
+    try:
+        raw = Path("/proc/1/cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace").strip()
+    except OSError:
+        return False
+    if not raw:
+        return False
+    first = Path(raw.split()[0]).name.lower()
+    lowered = raw.lower()
+    return first in {"systemd", "init"} or lowered.startswith("/sbin/init") or "systemd" in lowered[:80]
+
+
 def enrich_with_inodes(rows: list[dict]) -> list[dict]:
     if not rows or all(row.get("process") for row in rows):
         return rows
@@ -266,7 +279,10 @@ def read_host_listeners() -> list[dict]:
             rows.extend(parse_proc_net(tcp.read_text(encoding="utf-8", errors="replace"), ipv6=False))
         if tcp6.is_file():
             rows.extend(parse_proc_net(tcp6.read_text(encoding="utf-8", errors="replace"), ipv6=True))
-    rows = enrich_with_inodes(rows)
+    # Walking /proc only yields host process names when we share the host PID namespace.
+    # Otherwise inode matches stay inside the container (often python as pid 1).
+    if host_pid_namespace():
+        rows = enrich_with_inodes(rows)
     return sorted(
         rows,
         key=lambda row: (0 if row["possibly_public"] else 1, row["port"], row["address"], row["protocol"]),
@@ -279,15 +295,23 @@ def detect_ssh_ports(rows: list[dict] | None = None) -> list[int]:
     return ports
 
 
-def inventory_warning(*, host_network: bool, nft_backend: str) -> str:
+def inventory_warning(*, host_network: bool, nft_backend: str, host_pid: bool = False) -> str:
     if host_network:
+        sees_host_procs = host_pid or host_pid_namespace()
+        if not sees_host_procs:
+            return (
+                "Host network is enabled, so listening ports are from the host, "
+                "but this process is still in a container PID namespace. "
+                "Process names (for example python pid 1) are container-local. "
+                "Recreate with Compose pid: host (PORT_WARDEN_HOST_PID=1) to label host services."
+            )
         if nft_backend == "disabled":
             return (
-                "Host network is enabled, so this list is the host. "
+                "Host network and host PID are enabled, so this list is the host. "
                 "nft backend is still disabled: Preview/Apply will not change host nftables until backend is local or agent."
             )
         return (
-            "Host network is enabled. Process names come from the host listeners. "
+            "Host network and host PID are enabled. Process names come from host listeners. "
             "SSH is detected automatically from sshd. After Preview/Apply in enforce mode, "
             "ports that are not kept open or management-SSH stay dropped."
         )

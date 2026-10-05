@@ -10,12 +10,16 @@ services:
     env_file:
       - .env
     network_mode: host
+    # Required so process labels resolve host sshd/nginx/… not container python.
+    pid: host
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
       PORT_WARDEN_BIND_PORT: "9090"
       PORT_WARDEN_EXPOSE_PUBLIC: "1"
       PORT_WARDEN_HOST_NETWORK: "1"
+      PORT_WARDEN_HOST_PID: "1"
       PORT_WARDEN_NFT_BACKEND: local
+      PORT_WARDEN_RESTORE_ON_START: "1"
       PORT_WARDEN_MANAGEMENT_CIDRS: ${PORT_WARDEN_MANAGEMENT_CIDRS:-127.0.0.1/32,::1/128}
       PORT_WARDEN_DATA_DIR: /var/lib/port-warden
       PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
