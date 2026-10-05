@@ -76,9 +76,9 @@ def test_render_orders_rules_and_skips_expired():
     script = rendered.script
     assert "policy drop;" in script
     assert 'tcp dport 22 accept comment "pw:management-ssh"' in script
-    assert 'tcp dport { 80, 443, 8080 } accept comment "pw:excluded-ports"' not in script
-    kept = render_policy(_policy(rules=rules, excluded_ports=[80, 443, 8080]), now)
-    assert 'tcp dport { 80, 443, 8080 } accept comment "pw:excluded-ports"' in kept.script
+    assert 'tcp dport { 80, 443, 8080, 9090 } accept comment "pw:excluded-ports"' not in script
+    kept = render_policy(_policy(rules=rules, excluded_ports=[80, 443, 8080, 9090]), now)
+    assert 'tcp dport { 80, 443, 8080, 9090 } accept comment "pw:excluded-ports"' in kept.script
     assert kept.script.index("pw:excluded-ports") < kept.script.index("pw:sooner")
     assert "pw:old" not in script
     assert script.index("pw:sooner") < script.index("pw:later")
@@ -97,6 +97,9 @@ def test_lockout_requires_phrase_for_unknown_client():
     assert "203.0.113.50" not in reason or "drop" in reason or "Enforce" in reason
     safe, _ = evaluate_lockout(_policy(), "127.0.0.1")
     assert safe is False
+    open_ssh, note = evaluate_lockout(_policy(ssh_port=2222, excluded_ports=[2222]), "203.0.113.50")
+    assert open_ssh is False
+    assert "excluded_ports" in note
 
 
 def test_script_guard_rejects_other_tables():

@@ -15,7 +15,12 @@ from app.services.bruteforce.observe import observe_line
 from app.services.events import audit_dict as _audit_dict
 from app.services.events import event_dict, record_audit, record_event
 from app.services.honeypot_store import read_telemetry, write_desired
-from app.services.inventory.ports import REACHABILITY_NOTE, check_reachability, read_host_listeners
+from app.services.inventory.ports import (
+    REACHABILITY_NOTE,
+    check_reachability,
+    inventory_warning,
+    read_host_listeners,
+)
 from app.services.records import bf_config, create_ban, lift_ban, save_bf_config_fields
 
 router = APIRouter(tags=["ops"])
@@ -165,7 +170,15 @@ def ingest(body: IngestIn, request: Request, db: Session = Depends(db_session)):
 @router.get("/inventory/ports")
 def ports(request: Request, db: Session = Depends(db_session)):
     require_user(request, db)
-    return {"listeners": read_host_listeners(), "note": REACHABILITY_NOTE}
+    settings = request.app.state.settings
+    return {
+        "listeners": read_host_listeners(),
+        "note": REACHABILITY_NOTE,
+        "warning": inventory_warning(host_network=settings.host_network, nft_backend=settings.nft_backend),
+        "host_network": settings.host_network,
+        "ssh_port": settings.ssh_port,
+        "excluded_ports": settings.excluded_ports,
+    }
 
 
 @router.post("/inventory/reachability")

@@ -16,9 +16,11 @@ Use this before exposing the dashboard beyond loopback or applying enforce mode.
 
 - [ ] Host install binds `127.0.0.1` or another private address
 - [ ] `expose_public` is false on the host
-- [ ] Docker publish is intentional (default is `0.0.0.0:9090:9090`); restrict to `127.0.0.1:9090:9090` or put TLS/auth in front if the host is reachable from untrusted networks
+- [ ] Docker UI bind is intentional (default host-network HTTPS on `0.0.0.0:9090` with a build-time self-signed certificate)
+- [ ] `PORT_WARDEN_SSH_PORT` matches the real sshd port before enforce Apply
+- [ ] `PORT_WARDEN_MANAGEMENT_CIDRS` includes your admin source before enforce Apply
 - [ ] The Docker socket is not mounted into the API container
-- [ ] Default compose does not add `NET_ADMIN` and does not set `--privileged`
+- [ ] Default compose adds `NET_ADMIN` only (not `--privileged`); understand that Apply can rewrite `inet port_warden` on the host
 
 ## Firewall safety
 

@@ -17,7 +17,7 @@ from app.serialize import ban_dict, honeypot_dict, list_dict, rule_dict
 from app.services.events import audit_dict, event_dict, record_audit
 from app.services.firewall.presets import PRESETS, get_preset
 from app.services.honeypot_store import read_telemetry, write_desired
-from app.services.inventory.ports import REACHABILITY_NOTE, read_host_listeners
+from app.services.inventory.ports import REACHABILITY_NOTE, inventory_warning, read_host_listeners
 from app.services.records import add_entry, bf_config, create_ban, create_rule, lift_ban, save_bf_config_fields
 from app.services.firewall.backend import NftError
 from app.services.firewall.engine import LockoutError, set_setting
@@ -135,13 +135,17 @@ def home(request: Request, db: Session = Depends(db_session)):
 @router.get("/ports")
 def ports(request: Request, db: Session = Depends(db_session)):
     session = _session_or_401(request, db)
+    settings = request.app.state.settings
     return _page(
         request,
         "ports.html",
         session,
         listeners=read_host_listeners(),
         note=REACHABILITY_NOTE,
-        targets=request.app.state.settings.reachability_targets,
+        warning=inventory_warning(host_network=settings.host_network, nft_backend=settings.nft_backend),
+        targets=settings.reachability_targets,
+        ssh_port=settings.ssh_port,
+        excluded_ports=settings.excluded_ports,
     )
 
 

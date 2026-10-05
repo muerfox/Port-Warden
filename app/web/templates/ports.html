@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block body %}
 <p class="note">{{ note }} Port Warden does not scan the internet. A reachability check runs only for an address you configured.</p>
+{% if warning %}<p class="warning">{{ warning }}</p>{% endif %}
+<p>Management SSH port: <code>{{ ssh_port }}</code>. Excluded inbound TCP ports: <code>{{ excluded_ports | join(", ") }}</code>.</p>
 {% if not targets %}<p>No reachability targets are configured.</p>{% else %}<p>Configured targets: {{ targets | join(", ") }}</p>{% endif %}
 <table>
   <thead><tr><th>Proto</th><th>Address</th><th>Port</th><th>Scope</th></tr></thead>
@@ -9,7 +11,7 @@
     <tr>
       <td>{{ row.protocol }}</td>
       <td>{{ row.address }}</td>
-      <td>{{ row.port }}</td>
+      <td>{{ row.port }}{% if row.port == ssh_port %} · management SSH{% endif %}{% if row.port in excluded_ports %} · excluded{% endif %}</td>
       <td>{{ row.scope_label }}{% if row.possibly_public %} · possibly reachable{% endif %}</td>
     </tr>
   {% else %}

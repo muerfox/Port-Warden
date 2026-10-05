@@ -6,10 +6,10 @@ Port Warden is a single-host firewall desk. Desired state is stored in SQLite. n
 
 - Target is generic Linux with nftables. firewalld and iptables are not adapters in this version.
 - The service is Python 3.12, FastAPI, SQLite, and server-rendered pages.
-- Default nft backend is `disabled`. Apply writes a snapshot and does not call `nft`.
-- The preferred way to change the host is `host-agent/agent.py`, a root helper on a Unix socket. The alternative is `nft_backend: local` in the host network namespace with `CAP_NET_ADMIN`.
-- The management UI binds to loopback unless `expose_public` is set. Docker Compose publishes `0.0.0.0:9090` and sets that flag only inside the container network namespace.
-- Inbound TCP ports in `excluded_ports` (default 80, 443, 8080) are accepted before denylist, bans, and the enforce drop.
+- Default Docker Compose uses host network, `nft_backend: local`, and `CAP_NET_ADMIN` so inventory and Apply operate on the host. A bridge-only dashboard file remains for non-enforcing installs. The host-agent Unix helper is still available when you prefer not to give the API `NET_ADMIN`.
+- The management UI binds to loopback unless `expose_public` is set. Docker Compose listens on `0.0.0.0:9090` as HTTPS with a 10-year self-signed certificate from the image build.
+- Inbound TCP ports in `excluded_ports` (default 80, 443, 8080, 9090) are accepted before denylist, bans, and the enforce drop.
+- `ssh_port` is the management SSH destination port (set to 2222 when sshd listens there).
 
 ## Components
 
@@ -33,16 +33,17 @@ Input chain order:
 2. Accept established and related traffic.
 3. Accept loopback.
 4. Accept management CIDRs to the configured SSH port.
-5. Accept allowlist entries.
-6. Drop denylist entries that do not contain a protected range.
-7. Drop bans that do not contain a protected or allowlisted range.
-8. Named rules, lowest priority number first.
-9. Enforce mode policy is drop. Monitor mode policy is accept.
+5. Accept excluded inbound TCP ports.
+6. Accept allowlist entries.
+7. Drop denylist entries that do not contain a protected range.
+8. Drop bans that do not contain a protected or allowlisted range.
+9. Named rules, lowest priority number first.
+10. Enforce mode policy is drop. Monitor mode policy is accept.
 
 Stopping the API does not remove the table. Startup does not install or flush rules. A failed apply reinstalls the last good script when one exists.
 
 Monitor mode runs at priority -10. An accept verdict there can stop a later firewall from seeing the packet. The UI makes that explicit before the mode is stored.
 
-## What Docker does not do
+## What Docker still does not do
 
-A container on a bridge network has its own network namespace. nftables commands inside it do not protect the host. Publishing a port is a Docker NAT rule, not a host policy. Cloud security groups, upstream routers, and other host firewalls still apply. See `docs/DEPLOYMENT.md` and `docs/THREAT_MODEL.md`.
+The default Compose file uses the host network so nftables and inventory target the host. A bridge-only container (`docker-compose.dashboard.yml`) cannot protect the host. Cloud security groups, upstream routers, and other host firewalls still apply. See `docs/DEPLOYMENT.md` and `docs/THREAT_MODEL.md`.

@@ -29,30 +29,36 @@ PORT_WARDEN_NFT_BACKEND=agent
 
 `deploy/port-warden.service` runs the dashboard without `CAP_NET_ADMIN`.
 
-## Docker
+## Docker (host firewall)
 
 ```bash
 # Required: Compose env_file is a path string (compatible with older docker compose).
 cp .env.example .env
-# edit secrets, then:
+# If sshd listens on 2222:
+#   PORT_WARDEN_SSH_PORT=2222
+# Before the first enforce Apply, add your admin CIDR:
+#   PORT_WARDEN_MANAGEMENT_CIDRS=<your-ip>/32,127.0.0.1/32,::1/128
 docker compose up --build
 # or detached:
 docker compose up -d --build
 ```
 
-UI: `http://<host>:9090/` (all interfaces). Login uses `PORT_WARDEN_ADMIN_*` from `.env`. The entrypoint owns `./data` for the app user, so a manual `chown` is not required.
+UI: `https://<host>:9090/` (all interfaces). The image build writes a self-signed certificate at `/etc/port-warden/tls/` valid for 3650 days (10 years). Browsers show a warning. Login uses `PORT_WARDEN_ADMIN_*` from `.env`.
 
 Default Compose:
 
-- Publishes host port **9090** on **0.0.0.0** to the container listen port 9090
-- Accepts inbound TCP **80, 443, and 8080** before denylist, bans, and the enforce drop (`PORT_WARDEN_EXCLUDED_PORTS`)
-- Drops most capabilities, `no-new-privileges`, read-only root filesystem, memory and pid limits
-- Sets `PORT_WARDEN_NFT_BACKEND=disabled`
-- Sets `EXPOSE_PUBLIC=1` only so the process can listen inside the container. The host publish address is the exposure control. Do not copy that flag onto a host install.
+- Uses **host network** so Ports shows host listeners (including SSH on 2222) and nftables changes the host
+- Adds `CAP_NET_ADMIN` (not `--privileged`) and keeps it across the uid drop via `setpriv`
+- Sets `PORT_WARDEN_NFT_BACKEND=local` and `PORT_WARDEN_HOST_NETWORK=1`
+- Listens on HTTPS **9090** on `0.0.0.0`
+- Accepts inbound TCP **80, 443, 8080, 9090** before denylist, bans, and the enforce drop (`PORT_WARDEN_EXCLUDED_PORTS`)
+- Drops other capabilities, `no-new-privileges`, read-only root filesystem, memory and pid limits
 
-`docker-compose.host-nft.yml` is a separate file. It uses host networking and adds `CAP_NET_ADMIN`. That is enough to rewrite the host firewall. It is not `--privileged`, and it is not the default. Prefer the host agent.
+After Preview/Apply in enforce mode, `table inet port_warden` runs at input priority `-10` and sits in front of later filters for unmatched traffic. Management SSH stays open only for `PORT_WARDEN_MANAGEMENT_CIDRS` on `PORT_WARDEN_SSH_PORT`.
 
-`--privileged` is not required. It would disable seccomp and grant every capability. Do not use it.
+Dashboard-only (no host firewall): `docker compose -f docker-compose.dashboard.yml up --build`.
+
+`--privileged` is not required. Do not use it.
 
 Stopping the container leaves any previously applied `inet port_warden` table in the kernel.
 

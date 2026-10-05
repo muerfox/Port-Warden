@@ -14,7 +14,9 @@ excluded_ports:
   - 80
   - 443
   - 8080
-nft_backend: disabled
+  - 9090
+nft_backend: local
+host_network: true
 log_retention_days: 30
 log_max_bytes: 5000000
 bf_threshold: 5

@@ -97,6 +97,7 @@ def parse_proc_net(text: str, ipv6: bool) -> list[dict]:
 
 
 def read_host_listeners() -> list[dict]:
+    rows: list[dict] = []
     try:
         completed = subprocess.run(
             ["ss", "-H", "-lntu"],
@@ -106,17 +107,37 @@ def read_host_listeners() -> list[dict]:
             check=False,
         )
         if completed.returncode == 0 and completed.stdout.strip():
-            return parse_ss(completed.stdout)
+            rows = parse_ss(completed.stdout)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
-    rows: list[dict] = []
-    tcp = Path("/proc/net/tcp")
-    tcp6 = Path("/proc/net/tcp6")
-    if tcp.is_file():
-        rows.extend(parse_proc_net(tcp.read_text(encoding="utf-8", errors="replace"), ipv6=False))
-    if tcp6.is_file():
-        rows.extend(parse_proc_net(tcp6.read_text(encoding="utf-8", errors="replace"), ipv6=True))
-    return rows
+    if not rows:
+        tcp = Path("/proc/net/tcp")
+        tcp6 = Path("/proc/net/tcp6")
+        if tcp.is_file():
+            rows.extend(parse_proc_net(tcp.read_text(encoding="utf-8", errors="replace"), ipv6=False))
+        if tcp6.is_file():
+            rows.extend(parse_proc_net(tcp6.read_text(encoding="utf-8", errors="replace"), ipv6=True))
+    # Stable order for the panel: public-facing listeners first, then port number.
+    return sorted(rows, key=lambda row: (0 if row["possibly_public"] else 1, row["port"], row["address"], row["protocol"]))
+
+
+def inventory_warning(*, host_network: bool, nft_backend: str) -> str:
+    if host_network:
+        if nft_backend == "disabled":
+            return (
+                "Host network is enabled, so this list is the host. "
+                "nft backend is still disabled: Preview/Apply will not change host nftables until backend is local or agent."
+            )
+        return (
+            "Host network is enabled. This list is the host listeners. "
+            "After Preview/Apply in enforce mode, table inet port_warden sits in front of inbound traffic; "
+            "ports not allowed, excluded, or management-SSH stay dropped."
+        )
+    return (
+        "This process is not in the host network namespace, so the list is only what the container can see "
+        "(not host SSH or other host services). Use the default docker compose host-network deploy, "
+        "or a host install, for a real host port inventory and firewall."
+    )
 
 
 def check_reachability(host: str, port: int, allowed: list[str], timeout: float = 2.0) -> dict:

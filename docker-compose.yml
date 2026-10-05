@@ -1,10 +1,14 @@
-# Build and serve the dashboard:
+# Host firewall desk:
 #   docker compose up --build
-# UI: http://<host>:9090/ (published on 0.0.0.0:9090)
+# UI: https://<host>:9090/ (self-signed cert from image build)
 #
-# The API container cannot change host nftables. EXPOSE_PUBLIC applies only
-# inside the container network namespace; the host publish address below is
-# the exposure control. Copy secrets into .env for a real deployment.
+# This service uses the host network namespace and CAP_NET_ADMIN so inventory
+# sees host listeners (for example SSH on 2222) and Apply installs
+# table inet port_warden in front of the host input path.
+# It is not --privileged. Preview/confirm is still required before Apply.
+#
+# Before the first enforce Apply, set PORT_WARDEN_SSH_PORT to your real SSH
+# port and put your admin CIDR in PORT_WARDEN_MANAGEMENT_CIDRS.
 
 name: port-warden
 
@@ -13,24 +17,26 @@ services:
     build: .
     image: port-warden:local
     # String path only — older Compose rejects the {path, required} object form.
-    # Create .env before up (cp .env.example .env). Compose also reads .env for ${...} interpolation.
     env_file:
       - .env
+    network_mode: host
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
       PORT_WARDEN_BIND_PORT: "9090"
-      PORT_WARDEN_EXCLUDED_PORTS: "80,443,8080"
+      PORT_WARDEN_EXCLUDED_PORTS: ${PORT_WARDEN_EXCLUDED_PORTS:-80,443,8080,9090}
       PORT_WARDEN_EXPOSE_PUBLIC: "1"
-      PORT_WARDEN_NFT_BACKEND: disabled
+      PORT_WARDEN_HOST_NETWORK: "1"
+      PORT_WARDEN_NFT_BACKEND: local
+      PORT_WARDEN_SSH_PORT: ${PORT_WARDEN_SSH_PORT:-22}
+      PORT_WARDEN_MANAGEMENT_CIDRS: ${PORT_WARDEN_MANAGEMENT_CIDRS:-127.0.0.1/32,::1/128}
       PORT_WARDEN_DATA_DIR: /var/lib/port-warden
       PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
-      PORT_WARDEN_COOKIE_SECURE: "0"
-      # Override these in .env for anything beyond a local trial.
+      PORT_WARDEN_COOKIE_SECURE: "1"
+      PORT_WARDEN_SSL_CERTFILE: /etc/port-warden/tls/cert.pem
+      PORT_WARDEN_SSL_KEYFILE: /etc/port-warden/tls/key.pem
       PORT_WARDEN_SECRET_KEY: ${PORT_WARDEN_SECRET_KEY:-compose-dev-secret-change-me-please}
       PORT_WARDEN_ADMIN_USERNAME: ${PORT_WARDEN_ADMIN_USERNAME:-admin}
       PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
-    ports:
-      - "0.0.0.0:9090:9090"
     volumes:
       - ./data:/var/lib/port-warden
     read_only: true
@@ -38,18 +44,18 @@ services:
       - /tmp
     cap_drop:
       - ALL
-    # Entrypoint needs ownership of the data volume, then drops to uid 10001.
     cap_add:
       - CHOWN
       - FOWNER
       - SETUID
       - SETGID
-    security_opt:
-      - no-new-privileges:true
+      - NET_ADMIN
+    # no-new-privileges is omitted here so setpriv can keep ambient NET_ADMIN
+    # after the uid drop for local nft apply.
     pids_limit: 128
     mem_limit: 256m
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/health')"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; urllib.request.urlopen('https://127.0.0.1:9090/health', context=ssl._create_unverified_context())"]
       interval: 30s
       timeout: 5s
       retries: 3

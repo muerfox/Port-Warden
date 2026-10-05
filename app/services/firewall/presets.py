@@ -13,6 +13,16 @@ PRESETS: list[dict] = [
         "priority": 100,
     },
     {
+        "id": "ssh-2222",
+        "name": "allow-ssh-2222",
+        "action": "allow",
+        "direction": "in",
+        "protocol": "tcp",
+        "ports": "2222",
+        "comment": "SSH on 2222",
+        "priority": 100,
+    },
+    {
         "id": "http",
         "name": "allow-http",
         "action": "allow",

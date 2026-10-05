@@ -1,7 +1,8 @@
-# Same host-network firewall path as docker-compose.yml.
-# Prefer: docker compose up --build
+# Optional dashboard-only mode (bridge network). Inventory sees only the
+# container namespace and Apply cannot change the host firewall.
+# Prefer the default docker-compose.yml for a real host firewall desk.
 
-name: port-warden-host
+name: port-warden-dashboard
 
 services:
   port-warden:
@@ -9,16 +10,13 @@ services:
     image: port-warden:local
     env_file:
       - .env
-    network_mode: host
     environment:
       PORT_WARDEN_BIND_HOST: 0.0.0.0
       PORT_WARDEN_BIND_PORT: "9090"
       PORT_WARDEN_EXCLUDED_PORTS: ${PORT_WARDEN_EXCLUDED_PORTS:-80,443,8080,9090}
       PORT_WARDEN_EXPOSE_PUBLIC: "1"
-      PORT_WARDEN_HOST_NETWORK: "1"
-      PORT_WARDEN_NFT_BACKEND: local
-      PORT_WARDEN_SSH_PORT: ${PORT_WARDEN_SSH_PORT:-22}
-      PORT_WARDEN_MANAGEMENT_CIDRS: ${PORT_WARDEN_MANAGEMENT_CIDRS:-127.0.0.1/32,::1/128}
+      PORT_WARDEN_HOST_NETWORK: "0"
+      PORT_WARDEN_NFT_BACKEND: disabled
       PORT_WARDEN_DATA_DIR: /var/lib/port-warden
       PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
       PORT_WARDEN_COOKIE_SECURE: "1"
@@ -27,6 +25,8 @@ services:
       PORT_WARDEN_SECRET_KEY: ${PORT_WARDEN_SECRET_KEY:-compose-dev-secret-change-me-please}
       PORT_WARDEN_ADMIN_USERNAME: ${PORT_WARDEN_ADMIN_USERNAME:-admin}
       PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
+    ports:
+      - "0.0.0.0:9090:9090"
     volumes:
       - ./data:/var/lib/port-warden
     read_only: true
@@ -39,7 +39,8 @@ services:
       - FOWNER
       - SETUID
       - SETGID
-      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
     pids_limit: 128
     mem_limit: 256m
     restart: unless-stopped

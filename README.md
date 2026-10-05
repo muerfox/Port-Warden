@@ -1,8 +1,8 @@
 # Port Warden
 
-Port Warden is a defensive host firewall desk for a Linux server you administer. It keeps desired nftables policy in SQLite, shows listening ports, records JSON events, and can temporarily ban SSH password-guessing. Honeypots are opt-in and do not run commands.
+Port Warden is a defensive host firewall desk for a Linux server you administer. It keeps desired nftables policy in SQLite, shows host listening ports, records JSON events, and can temporarily ban SSH password-guessing. Honeypots are opt-in and do not run commands.
 
-The default nft backend is **disabled**. Preview and apply stage a ruleset. They do not change the host until you point the service at the host agent or run the optional host-network compose file.
+Default Docker Compose uses the **host network** and the **local** nft backend so inventory sees host listeners (including SSH on 2222) and Apply installs `table inet port_warden` in front of inbound host traffic. Preview and confirm are still required before Apply. It is not `--privileged`.
 
 ## Defaults
 
@@ -10,28 +10,29 @@ The default nft backend is **disabled**. Preview and apply stage a ruleset. They
 | --- | --- |
 | OS / firewall | Generic Linux, nftables table `inet port_warden` |
 | App | Python 3.12, FastAPI, SQLite, server-rendered UI |
-| Management bind | `127.0.0.1:8443` |
-| Enforcement | Off until you select the agent or local backend |
+| Docker UI | `https://0.0.0.0:9090/` (self-signed, 10-year cert from image build) |
+| Enforcement | Local nft on host network after Preview/Apply |
+| Excluded ports | TCP 80, 443, 8080, 9090 (accepted before the drop) |
 | Brute force | 5 failures in 10 minutes, 1 hour ban, no automatic permanent bans, no automatic nft update |
 | Honeypots | Off |
 
-firewalld and iptables are not implemented. Docker does not secure the host by itself: a bridge container does not own the host firewall, and routers, NAT, and cloud security groups still decide what the internet can reach.
+firewalld and iptables are not adapters in this version. Cloud security groups and upstream routers still apply. A bridge-only dashboard mode remains in `docker-compose.dashboard.yml` if you do not want host firewall control.
 
 ## Layout
 
 ```text
 app/                 API, UI, firewall, bans, inventory
 honeypots/decoy.py   low-interaction SSH and HTTP decoys
-host-agent/          root helper that applies only this table
+host-agent/          optional root helper that applies only this table
 docs/                architecture, threat model, API, deployment, checklist
-docker-compose.yml   dashboard only, loopback publish, no NET_ADMIN
+docker-compose.yml   host network + NET_ADMIN + local nft
 scripts/             install, uninstall, rollback, backup, restore
 tests/
 ```
 
 ## Setup from scratch (Docker)
 
-Use this path on a clean machine. It builds the image and serves the UI on port **9090** on all interfaces (`0.0.0.0`). The default nft backend stays disabled, so this does not change the host firewall. Inbound TCP 80, 443, and 8080 are excluded from the drop policy when a ruleset is later applied.
+Use this path on a clean machine. The image build creates a self-signed certificate valid for 10 years and serves HTTPS on port **9090**. Compose shares the host network namespace so the Ports page lists host listeners and Apply can install the host firewall table.
 
 1. Install Docker Engine and the Compose plugin, then start the daemon.
 
@@ -59,18 +60,19 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
    cd Port-Warden
    ```
 
-3. Create `.env` (required — older Compose only accepts a string `env_file` path, so the file must exist).
+3. Create `.env` and set SSH / management before the first enforce Apply.
 
    ```bash
    cp .env.example .env
-   # set at least:
+   # required secrets:
    #   PORT_WARDEN_SECRET_KEY=<long random string>
    #   PORT_WARDEN_ADMIN_USERNAME=admin
    #   PORT_WARDEN_ADMIN_PASSWORD=<12+ characters>
    #
-   # Local trial example:
-   #   PORT_WARDEN_SECRET_KEY=compose-dev-secret-change-me-please
-   #   PORT_WARDEN_ADMIN_PASSWORD=portwarden-change-me
+   # if sshd listens on 2222:
+   #   PORT_WARDEN_SSH_PORT=2222
+   # put your admin source address/CIDR here so enforce mode keeps SSH:
+   #   PORT_WARDEN_MANAGEMENT_CIDRS=203.0.113.10/32,127.0.0.1/32,::1/128
    ```
 
 4. Build and start.
@@ -84,17 +86,25 @@ Use this path on a clean machine. It builds the image and serves the UI on port 
 
 5. Open the UI and sign in.
 
-   - URL: `http://<host>:9090/` (bound on all interfaces)
-   - Health: `curl -s http://127.0.0.1:9090/health`
+   - URL: `https://<host>:9090/` (self-signed)
+   - Health: `curl -sk https://127.0.0.1:9090/health`
    - Login: username/password from `.env`
+   - Ports page should list host listeners, including SSH on 2222 when that is open on the host
 
-6. Stop.
+6. Put the firewall in front of the host.
+
+   1. Confirm Ports shows the host listeners you expect.
+   2. Add allow rules for any service that should stay reachable beyond excluded ports and management SSH.
+   3. Firewall → Preview → read the lockout warning → Apply.
+   4. Enforce mode drops inbound traffic that is not established, loopback, management SSH, allowlisted, excluded, or matched by an allow rule.
+
+7. Stop.
 
    ```bash
    docker compose down
    ```
 
-Host nftables apply, the root agent, rollback, backup, and honeypots are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before enforce mode.
+Stopping the container does **not** remove an already applied `inet port_warden` table. Rollback, backup, and honeypots are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before enforce mode.
 
 ## Setup from scratch (Python, no Docker)
 
@@ -105,8 +115,8 @@ git clone https://github.com/muerfox/Port-Warden.git
 cd Port-Warden
 ./scripts/install.sh
 cp .env.example .env
-# edit PORT_WARDEN_SECRET_KEY and PORT_WARDEN_ADMIN_PASSWORD (12+)
-# keep PORT_WARDEN_BIND_HOST=127.0.0.1 and PORT_WARDEN_EXPOSE_PUBLIC=0
+# edit .env: secret, admin password, bind 127.0.0.1, expose_public 0
+# for host enforcement use the host-agent or CAP_NET_ADMIN with nft_backend=local
 .venv/bin/python -m app
 ```
 
@@ -116,7 +126,8 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 - Named rules support address, protocol, ports, direction, comment, expiry, and priority.
 - Presets fill a form. They do not open ports.
-- Inbound TCP 80, 443, and 8080 are excluded from the drop: they are accepted before denylist, bans, and enforce mode. Change them with `PORT_WARDEN_EXCLUDED_PORTS`.
+- Inbound TCP 80, 443, 8080, and 9090 are excluded from the drop by default. Change them with `PORT_WARDEN_EXCLUDED_PORTS`.
+- Set `PORT_WARDEN_SSH_PORT` to the real sshd port (22 or 2222). Management CIDRs keep that port open for those sources only.
 - Allowlist and management addresses cannot be banned.
 - Apply from an SSH client that the new policy would drop requires the confirmation phrase.
 - If `nft` fails after a previous good apply, the last good script is installed again.
@@ -128,10 +139,8 @@ Events are JSON lines in `data/logs/port-warden.jsonl` with timestamp, event typ
 
 ## Honeypots
 
-`docker compose --profile honeypots up -d` after you mark a decoy on in the UI. They are isolated, low-interaction, and documented in [docs/HONEYPOTS.md](docs/HONEYPOTS.md). The UI vendored copy of htmx 2.0.4 is under the Zero-Clause BSD license in `app/web/static/htmx.LICENSE.txt`.
+Opt-in with Compose profile `honeypots`. Do not enable the SSH decoy on port 2222 if the host already uses 2222 for real SSH. See [docs/HONEYPOTS.md](docs/HONEYPOTS.md).
 
-## Later, not in this version
+## Security checklist
 
-firewalld/ufw adapters, more than one node, a packet-inspecting WAF, community blocklist sync, eBPF, and a Kubernetes operator.
-
-Review [docs/SECURITY_CHECKLIST.md](docs/SECURITY_CHECKLIST.md) before you rely on it.
+Use [docs/SECURITY_CHECKLIST.md](docs/SECURITY_CHECKLIST.md) before exposing the dashboard or applying enforce mode.

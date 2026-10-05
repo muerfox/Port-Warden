@@ -77,6 +77,9 @@ def evaluate_lockout(policy: Policy, admin_ip: str) -> tuple[bool, str]:
         if addr.version == network.version and addr in network:
             return False, "Current client is inside a management CIDR that keeps SSH allowed."
 
+    if policy.ssh_port in set(policy.excluded_ports):
+        return False, "SSH port is in excluded_ports and stays accepted ahead of the drop."
+
     for cidr in policy.allow_cidrs:
         network = ipaddress.ip_network(cidr, strict=False)
         if addr.version == network.version and addr in network:

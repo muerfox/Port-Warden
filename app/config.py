@@ -45,12 +45,16 @@ class Settings(BaseSettings):
     bind_port: int = 8443
     expose_public: bool = False
     cookie_secure: bool = False
+    ssl_certfile: str = ""
+    ssl_keyfile: str = ""
     session_hours: int = 12
     database_url: str = "sqlite:///./data/port-warden.sqlite"
     data_dir: Path = Path("./data")
 
     nft_backend: Literal["disabled", "local", "agent"] = "disabled"
     nft_bin: str = "nft"
+    # True when the process shares the host network namespace (Compose host mode).
+    host_network: bool = False
     agent_socket: str = "/run/port-warden/apply.sock"
     agent_token_file: str = "/etc/port-warden/agent.token"
 
@@ -62,7 +66,7 @@ class Settings(BaseSettings):
     )
     # Inbound TCP ports accepted before denylist, bans, and the enforce drop.
     excluded_ports: Annotated[list[int], NoDecode] = Field(
-        default_factory=lambda: [80, 443, 8080]
+        default_factory=lambda: [80, 443, 8080, 9090]
     )
     ssh_port: int = 22
 

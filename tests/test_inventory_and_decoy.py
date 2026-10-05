@@ -5,8 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from app.__main__ import ssl_kwargs
 from app.config import Settings
-from app.services.inventory.ports import check_reachability, classify_address, parse_proc_net, parse_ss
+from app.services.inventory.ports import (
+    check_reachability,
+    classify_address,
+    inventory_warning,
+    parse_proc_net,
+    parse_ss,
+)
 
 
 def test_ss_and_proc_classification():
@@ -49,6 +56,16 @@ def test_reachability_is_allowlisted(tmp_path):
     assert "not proof" in result["note"]
 
 
+def test_tls_is_off_unless_both_files_are_set():
+    assert ssl_kwargs(Settings(secret_key="x" * 16, ssl_certfile="", ssl_keyfile="")) == {}
+    with pytest.raises(RuntimeError):
+        ssl_kwargs(Settings(secret_key="x" * 16, ssl_certfile="/cert.pem", ssl_keyfile=""))
+    assert ssl_kwargs(Settings(secret_key="x" * 16, ssl_certfile="/cert.pem", ssl_keyfile="/key.pem")) == {
+        "ssl_certfile": "/cert.pem",
+        "ssl_keyfile": "/key.pem",
+    }
+
+
 def test_public_bind_requires_explicit_flag():
     with pytest.raises(RuntimeError):
         Settings(bind_host="0.0.0.0", expose_public=False, secret_key="x" * 16).assert_safe_bind()
@@ -63,9 +80,13 @@ def test_csv_list_env_vars(monkeypatch):
     settings = Settings()
     assert settings.management_cidrs == ["127.0.0.1/32", "::1/128"]
     assert settings.reachability_targets == []
-    assert settings.excluded_ports == [80, 443, 8080]
-    monkeypatch.setenv("PORT_WARDEN_EXCLUDED_PORTS", "80,443,8080")
-    assert Settings().excluded_ports == [80, 443, 8080]
+    assert settings.excluded_ports == [80, 443, 8080, 9090]
+    monkeypatch.setenv("PORT_WARDEN_EXCLUDED_PORTS", "80,443,8080,9090")
+    assert Settings().excluded_ports == [80, 443, 8080, 9090]
+    warn = inventory_warning(host_network=False, nft_backend="disabled")
+    assert "not in the host network" in warn
+    host_warn = inventory_warning(host_network=True, nft_backend="local")
+    assert "Host network is enabled" in host_warn
 
 
 def _load_decoy():
