@@ -9,6 +9,11 @@
   <div><strong>{{ traffic.total_events }}</strong> Attacks (24h)</div>
 </section>
 <p>Backend <code>{{ firewall.backend }}</code> · mode <code>{{ firewall.mode }}</code></p>
+<p>Gateway <code>{{ "on" if gateway.enabled else "off" }}</code>
+  · active WAN <code>{{ gateway.active_iface or "—" }}</code>
+  · WireGuard peers <code>{{ gateway.peer_count }}</code>
+  · IPS alerts (24h) <code>{{ gateway.ips_alerts_24h }}</code>
+  · <a href="/gateway">Gateway</a></p>
 <p>Brute-force threshold {{ bruteforce.threshold }} failures in {{ bruteforce.window_seconds }}s, then a {{ bruteforce.ban_seconds }}s ban. Permanent bans after {{ bruteforce.permanent_after or "never" }}.</p>
 {% for warning in firewall.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
 
@@ -27,7 +32,7 @@
 </figure>
 <p><a href="/traffic">Open traffic graphs</a></p>
 {% else %}
-<p class="note">No port attack events in the last 24 hours yet. <a href="/traffic">Traffic</a></p>
+<p class="note">No port attack pressure in the last 24 hours yet. Apply enforce mode, then check <a href="/traffic">Traffic</a>.</p>
 {% endif %}
 
 <p class="note">{{ note }}</p>

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Gateway mode forwards LAN and WireGuard clients out a WAN interface. It stays off until you save it here and Preview/Apply on the Firewall page. <code>ip_forward</code> changes only after that Apply succeeds.</p>
+<p>Active WAN: <code>{{ gateway.active_iface or "none" }}</code> ({{ gateway.active_wan }}). WireGuard peers: {{ gateway.peer_count }}. IPS alerts in 24h: {{ gateway.ips_alerts_24h }}.</p>
+{% if suricata_rules %}
+<p class="note">Suricata rules file: <code>{{ suricata_rules }}</code></p>
+{% else %}
+<p class="note">Set <code>PORT_WARDEN_SURICATA_RULES</code> before enabling IPS. Apply refuses IPS when Suricata or the rules file is missing.</p>
+{% endif %}
+
+<h2>Interfaces</h2>
+<form method="post" action="/gateway">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label><input type="checkbox" name="gateway_enabled" value="yes" {% if gateway.enabled %}checked{% endif %}> Enable gateway</label>
+  <label><input type="checkbox" name="nat_enabled" value="yes" {% if gateway.nat_enabled %}checked{% endif %}> Masquerade LAN out the active WAN</label>
+  <label><input type="checkbox" name="wg_enabled" value="yes" {% if gateway.wg_enabled %}checked{% endif %}> Treat WireGuard <code>wg0</code> as LAN</label>
+  <label><input type="checkbox" name="ips_enabled" value="yes" {% if gateway.ips_enabled %}checked{% endif %}> Queue new WAN flows to Suricata</label>
+  <p>
+    <label>WAN <select name="wan_iface">
+      <option value="">—</option>
+      {% for name in interfaces %}
+      <option value="{{ name }}" {% if name == gateway.wan_iface %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select></label>
+    <label>WAN gateway IP <input name="wan_gateway" value="{{ gateway.wan_gateway }}" placeholder="203.0.113.1"></label>
+  </p>
+  <p>
+    <label>Backup WAN <select name="wan_backup_iface">
+      <option value="">—</option>
+      {% for name in interfaces %}
+      <option value="{{ name }}" {% if name == gateway.wan_backup_iface %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select></label>
+    <label>Backup gateway IP <input name="wan_backup_gateway" value="{{ gateway.wan_backup_gateway }}" placeholder="198.51.100.1"></label>
+  </p>
+  <p>
+    <label>LAN interfaces</label>
+    <select name="lan_ifaces" multiple size="6">
+      {% for name in interfaces %}
+      <option value="{{ name }}" {% if name in gateway.lan_ifaces %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </p>
+  <p>
+    <label>WireGuard port <input name="wg_port" value="{{ gateway.wg_port }}"></label>
+    <label>WireGuard address <input name="wg_address" value="{{ gateway.wg_address }}"></label>
+  </p>
+  <button type="submit">Save gateway settings</button>
+</form>
+{% if not interfaces %}
+<p class="note">No interfaces were returned by <code>ip -j link</code>. The process needs permission to read host links.</p>
+{% endif %}
+
+<h2>WireGuard peers</h2>
+<p class="note">The client private key is shown once, as a downloaded config. Replace <code>ENDPOINT_HOST</code> with this firewall’s public address.</p>
+<form method="post" action="/gateway/peers">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Name <input name="name" required></label>
+  <label>Allowed IPs <input name="allowed_ips" value="10.77.0.2/32" required></label>
+  <button type="submit">Add peer</button>
+</form>
+<table>
+  <thead><tr><th>Name</th><th>Public key</th><th>Allowed IPs</th><th>Config</th></tr></thead>
+  <tbody>
+  {% for peer in gateway.peers %}
+    <tr>
+      <td>{{ peer.name }}</td>
+      <td><code>{{ peer.public_key }}</code></td>
+      <td><code>{{ peer.allowed_ips }}</code></td>
+      <td>
+        {% if peer.client_private %}
+        <form method="post" action="/gateway/peers/{{ peer.id }}/config">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">Download once</button>
+        </form>
+        {% else %}
+        <span class="note">already downloaded</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4">No peers yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

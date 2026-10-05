@@ -51,6 +51,7 @@ Default Compose:
 - Sets `PORT_WARDEN_NFT_BACKEND=local`, `PORT_WARDEN_HOST_NETWORK=1`, and `PORT_WARDEN_HOST_PID=1`
 - Listens on HTTPS **9090** on `0.0.0.0`
 - Discovers host listeners on the Ports panel; open ports and management SSH are chosen there
+- Tracks dropped destination ports in nft probe sets for Traffic graphs (optional `/var/log` mount adds `pw:drop` source IPs)
 - Drops other capabilities, read-only root filesystem, memory and pid limits
 
 After Preview/Apply in enforce mode, `table inet port_warden` runs at input priority `-10` and sits in front of later filters for unmatched traffic. Management SSH stays open only for `PORT_WARDEN_MANAGEMENT_CIDRS` on the SSH port you marked in the panel.
@@ -58,6 +59,17 @@ After Preview/Apply in enforce mode, `table inet port_warden` runs at input prio
 Dashboard-only (no host firewall): `docker compose -f docker-compose.dashboard.yml up --build`.
 
 `--privileged` is not required. Do not use it.
+
+## Gateway mode
+
+Gateway forwarding, NAT, WireGuard, and Suricata stay off until an administrator enables them on the Gateway page and Applies. Requirements on the host:
+
+- `ip` and permission to set `net.ipv4.ip_forward` and `net.ipv6.conf.all.forwarding` (done only after Apply)
+- WireGuard kernel support, the `wg` command, and `/dev/net/tun` (Compose passes the device through)
+- Suricata on `PATH` and `PORT_WARDEN_SURICATA_RULES` pointing at a rules file you already trust. The app does not download rules. Apply refuses to install an IPS queue when Suricata is not running, so packets are not left in an empty queue.
+- Literal gateway IP addresses for WAN health checks. Hostnames are rejected.
+
+Compose adds `CAP_NET_RAW` for those health checks. It is still not `--privileged`.
 
 Stopping the container leaves any previously applied `inet port_warden` table in the kernel. A reboot clears kernel tables. With `PORT_WARDEN_RESTORE_ON_START=1` (the Compose default), the next start reinstalls `data/last-good.nft` only after an administrator has applied once. Host installs can also enable `deploy/port-warden-firewall.service`, which runs `scripts/restore-last-good.sh` before the network is fully online.
 

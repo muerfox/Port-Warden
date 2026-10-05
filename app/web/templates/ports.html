@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 {% block body %}
-<p class="lede">Port Warden discovers listening sockets and the process behind each one. Keep open the services you want reachable, then Preview/Apply on the Firewall page. SSH is detected automatically from <code>sshd</code>.</p>
+<p class="lede">Port Warden discovers listening sockets and ports under attack pressure. Keep open the services you want reachable, then Preview/Apply on the Firewall page. SSH is detected automatically from <code>sshd</code>.</p>
 <p class="note">{{ note }}</p>
 {% if warning %}<p class="warning">{{ warning }}</p>{% endif %}
 <p>Auto-detected management SSH: <code>tcp/{{ ssh_port }}</code> for management CIDRs. Open ports after Apply: <code>{{ open_ports | join(", ") or "(UI bind only)" }}</code>.</p>
 {% if not targets %}<p>No optional reachability targets are configured.</p>{% else %}<p>Configured targets: {{ targets | join(", ") }}</p>{% endif %}
+{% if probes %}
+<p>Attack pressure (24h) on {{ probes|length }} port{{ "" if probes|length == 1 else "s" }}. Rows marked <em>discovered by attacks</em> are not listening locally but are being probed and dropped.</p>
+{% endif %}
 <table>
   <thead>
     <tr>
@@ -64,5 +67,5 @@
   {% endfor %}
   </tbody>
 </table>
-<p class="note">Changes here update desired policy only. Open Firewall → Preview → Apply to install them on the host. If a process shows as unknown, rebuild with SYS_PTRACE/DAC_READ_SEARCH so the host can resolve socket owners.</p>
+<p class="note">Changes here update desired policy only. Open Firewall → Preview → Apply to install them on the host. Attack-discovered ports need an enforce Apply so nft probe sets can count drops.</p>
 {% endblock %}

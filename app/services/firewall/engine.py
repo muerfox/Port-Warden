@@ -115,6 +115,7 @@ class FirewallEngine:
             )
             for row in db.scalars(select(Rule)).all()
         ]
+        from app.services.gateway.state import load_gateway
         from app.services.inventory.workspace import effective_open_ports, effective_ssh_port
 
         return Policy(
@@ -126,6 +127,7 @@ class FirewallEngine:
             deny_cidrs=deny,
             ban_cidrs=bans,
             rules=rules,
+            gateway=load_gateway(db),
         )
 
     def render(self, db: Session, now=None) -> Rendered:
@@ -198,7 +200,25 @@ class FirewallEngine:
         if risk and lockout_phrase != LOCKOUT_PHRASE:
             raise LockoutError(reason + f" Type {LOCKOUT_PHRASE} to apply anyway.")
         if self.enforces:
+            from app.services.gateway.ips import start_suricata
+            from app.services.gateway.runtime import assert_gateway_ready, sync_applied_state
+
+            assert_gateway_ready(self.settings, policy)
+            if policy.gateway.enabled and policy.gateway.ips_enabled:
+                start_suricata(self.settings)
+            previous = self.last_good
             self.push(rendered.script)
+            try:
+                sync_applied_state(self.settings, db, policy, rendered.script, enforces=True)
+            except Exception as exc:
+                if previous:
+                    try:
+                        self.backend.apply(previous)
+                        self.last_good = previous
+                        (self.settings.data_dir / "last-good.nft").write_text(previous, encoding="utf-8")
+                    except Exception:
+                        pass
+                raise NftError(f"gateway runtime failed; previous ruleset restored: {exc}") from exc
             applied = True
             label = "applied"
         else:
@@ -263,7 +283,10 @@ class FirewallEngine:
             raise ValueError("no previous applied snapshot to roll back to")
         target = snaps[1]
         if self.enforces:
+            from app.services.gateway.runtime import sync_applied_state
+
             self.push(target.script)
+            sync_applied_state(self.settings, db, self.load_policy(db), target.script, enforces=True)
         else:
             raise ValueError("nft backend is disabled; rollback would not change the host")
         digest = script_sha(target.script)
@@ -335,6 +358,9 @@ class FirewallEngine:
             return False
         rendered = self.render(db)
         self.push(rendered.script)
+        from app.services.gateway.runtime import sync_applied_state
+
+        sync_applied_state(self.settings, db, self.load_policy(db), rendered.script, enforces=True)
         digest = script_sha(rendered.script)
         self._save_snapshot(db, rendered.script, digest, True, "auto-ban")
         self.json_log.emit("ban_auto_apply", action="applied", src_ip="", rule_id="", sha256=digest)

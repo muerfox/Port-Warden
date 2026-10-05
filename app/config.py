@@ -84,7 +84,17 @@ class Settings(BaseSettings):
     bf_cooldown_seconds: int = 600
     bf_permanent_after: int = 0
     auth_log_path: str = ""
+    # Optional host syslog/kern log containing nft lines with prefix pw:drop.
+    # Compose can mount host /var/log at /var/log/host. Probe sets work without this.
+    nft_log_path: str = ""
+    probe_poll_seconds: int = 30
     ban_auto_apply: bool = False
+    suricata_bin: str = "suricata"
+    suricata_rules: str = ""
+    wg_bin: str = "wg"
+    ip_bin: str = "ip"
+    ping_bin: str = "ping"
+    failover_seconds: int = 15
 
     reachability_targets: Annotated[list[str], NoDecode] = Field(default_factory=list)
     login_rate_limit: int = 5

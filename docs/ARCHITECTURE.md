@@ -9,6 +9,7 @@ Port Warden is a single-host firewall desk. Desired state is stored in SQLite. n
 - Default Docker Compose uses host network, host PID (`pid: host`), `nft_backend: local`, and `CAP_NET_ADMIN` so inventory (including process labels) and Apply operate on the host. A bridge-only dashboard file remains for non-enforcing installs. The host-agent Unix helper is still available when you prefer not to give the API `NET_ADMIN`.
 - The management UI binds to loopback unless `expose_public` is set. Docker Compose listens on `0.0.0.0:9090` as HTTPS with a 10-year self-signed certificate from the image build.
 - Listening ports are discovered from the host with process/service labels (`ss -p` and `/proc`). Operators keep ports open in the Ports panel; SSH is auto-detected from `sshd`. Choices are stored in SQLite and rendered into the nftables policy. The UI bind port is always kept open.
+- Enforce mode tracks dropped TCP/UDP destination ports in dynamic nft sets (`probe_tcp` / `probe_udp`). Traffic graphs and Ports use those counters (plus auth/honeypot events) so scanned ports appear even when nothing is listening. Optional host syslog with `pw:drop` adds source IPs.
 - Protection packs install early deny rules for common high-risk services (Telnet, FTP, databases, mail, RPC/NFS, Docker/K8s APIs). They update desired state only until Apply.
 - Env `excluded_ports` / `ssh_port` are optional fallbacks when live detection is unavailable.
 
@@ -42,6 +43,8 @@ Input chain order:
 10. Drop bans that do not contain a protected or allowlisted range.
 11. Named rules, lowest priority number first.
 12. Enforce mode logs and drops what remains. Monitor mode policy is accept.
+
+Gateway mode (off by default) adds a forward chain and an optional postrouting masquerade in the same table. LAN and `wg0` may leave via the active WAN. New WAN-originated flows are dropped, or queued to Suricata when IPS is enabled. `ip_forward` is turned on only after a successful Apply and restored on rollback to a non-gateway ruleset. Dual-WAN failover health-checks the primary gateway address and moves masquerade plus fwmark `0x7077` to the backup.
 
 Stopping the API does not remove the table. Startup does not install or flush rules. A failed apply reinstalls the last good script when one exists.
 

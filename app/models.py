@@ -139,3 +139,15 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class WgPeer(Base):
+    __tablename__ = "wg_peers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    public_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    allowed_ips: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Cleared after the operator downloads the client config once.
+    client_private: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

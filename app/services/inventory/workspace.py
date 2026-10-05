@@ -102,18 +102,31 @@ def consolidate_listeners(rows: list[dict]) -> list[dict]:
     )
 
 
-def panel_rows(db: Session, settings: Settings) -> list[dict]:
+def panel_rows(
+    db: Session,
+    settings: Settings,
+    *,
+    attack_stats: dict | None = None,
+) -> list[dict]:
     listeners = read_host_listeners()
     open_ports = set(effective_open_ports(db, settings))
     ssh_port = effective_ssh_port(db, settings, listeners)
     bind = int(settings.bind_port)
+    attack_by_port = {
+        int(row["port"]): row
+        for row in (attack_stats or {}).get("ports", [])
+        if row.get("port") is not None
+    }
     rows = []
+    seen_ports: set[int] = set()
     for item in consolidate_listeners(listeners):
         port = int(item["port"])
+        seen_ports.add(port)
         kept = port in open_ports
         process = item.get("process") or ""
         pid = item.get("pid")
         service = item.get("service") or "unknown"
+        attack = attack_by_port.get(port)
         if port == bind:
             status = "UI panel (always open)"
             if not process:
@@ -126,6 +139,8 @@ def panel_rows(db: Session, settings: Settings) -> list[dict]:
             status = "kept open"
         else:
             status = "will drop in enforce"
+        if attack and attack.get("count"):
+            status = f"{status} · {int(attack['count'])} hits (24h)"
         process_text = process or "unknown"
         if pid:
             process_text = f"{process_text} (pid {pid})"
@@ -139,6 +154,37 @@ def panel_rows(db: Session, settings: Settings) -> list[dict]:
                 "is_ssh": bool(item.get("is_ssh")) or port == ssh_port,
                 "is_ui": port == bind,
                 "status": status,
+                "attack_count": int(attack["count"]) if attack else 0,
+            }
+        )
+    # Ports with drop/probe pressure but no local listener — discovered by attack signs.
+    for port, attack in sorted(attack_by_port.items(), key=lambda item: (-int(item[1].get("count") or 0), item[0])):
+        if port in seen_ports or port == bind:
+            continue
+        count = int(attack.get("count") or 0)
+        if count <= 0:
+            continue
+        protocols = attack.get("protocols") or ["tcp"]
+        protocol = protocols[0] if protocols else "tcp"
+        rows.append(
+            {
+                "protocol": protocol,
+                "port": port,
+                "addresses": [],
+                "address_text": "(not listening)",
+                "process": "",
+                "process_text": "—",
+                "pid": None,
+                "service": "probed / not listening",
+                "scope": "all_interfaces",
+                "scope_label": "Seen in drop / probe pressure",
+                "possibly_public": True,
+                "is_open": port in open_ports,
+                "is_ssh": port == ssh_port,
+                "is_ui": False,
+                "is_ssh_process": False,
+                "status": f"discovered by attacks · {count} hits (24h)",
+                "attack_count": count,
             }
         )
     return rows

@@ -173,8 +173,15 @@ def ingest(body: IngestIn, request: Request, db: Session = Depends(db_session)):
 def ports(request: Request, db: Session = Depends(db_session)):
     require_user(request, db)
     settings = request.app.state.settings
+    traffic = port_attack_stats(
+        db,
+        settings,
+        hours=24,
+        limit=20,
+        backend=request.app.state.engine.backend,
+    )
     return {
-        "listeners": panel_rows(db, settings),
+        "listeners": panel_rows(db, settings, attack_stats=traffic),
         "raw_listeners": read_host_listeners(),
         "note": REACHABILITY_NOTE,
         "warning": inventory_warning(
@@ -186,6 +193,7 @@ def ports(request: Request, db: Session = Depends(db_session)):
         "host_pid": settings.host_pid,
         "ssh_port": effective_ssh_port(db, settings),
         "open_ports": effective_open_ports(db, settings),
+        "probes": traffic.get("ports", []),
     }
 
 
@@ -228,7 +236,13 @@ def analytics_ports(
     limit: int = Query(default=12, ge=1, le=50),
 ):
     require_user(request, db)
-    return port_attack_stats(db, request.app.state.settings, hours=hours, limit=limit)
+    return port_attack_stats(
+        db,
+        request.app.state.settings,
+        hours=hours,
+        limit=limit,
+        backend=request.app.state.engine.backend,
+    )
 
 
 @router.get("/events")

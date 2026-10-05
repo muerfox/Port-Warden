@@ -79,6 +79,10 @@ def test_render_orders_rules_and_skips_expired():
     assert 'accept comment "pw:icmpv6-essential"' in script
     assert 'udp sport 67 udp dport 68 accept comment "pw:dhcpv4"' in script
     assert 'log prefix "pw:drop "' in script
+    assert "set probe_tcp {" in script
+    assert "set probe_udp {" in script
+    assert 'add @probe_tcp { tcp dport }' in script
+    assert 'drop comment "pw:drop-tcp"' in script
     assert script.index("pw:dhcpv4") < script.index("pw:management-ssh")
     assert 'tcp dport { 80, 443, 8080, 9090 } accept comment "pw:excluded-ports"' not in script
     kept = render_policy(_policy(rules=rules, excluded_ports=[80, 443, 8080, 9090]), now)

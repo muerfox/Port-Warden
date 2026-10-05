@@ -63,8 +63,25 @@ def _port_hits(ports: str, ssh_port: int) -> bool:
     return False
 
 
+def _gateway_block(policy: Policy) -> str:
+    gateway = policy.gateway
+    if not gateway.enabled:
+        return ""
+    if not gateway.lan_ifaces and not gateway.wg_enabled:
+        return "Gateway mode is on without a LAN interface or WireGuard, so the admin LAN path is not accepted."
+    if not gateway.wan_iface and not gateway.wan_backup_iface:
+        return "Gateway mode is on without a WAN interface, so forwarded admin traffic has no accepted path."
+    return ""
+
+
+def _safe(policy: Policy, reason: str) -> tuple[bool, str]:
+    if policy.gateway.enabled and not _gateway_block(policy):
+        return False, reason + " LAN-to-WAN forwarding stays accepted."
+    return False, reason
+
+
 def evaluate_lockout(policy: Policy, admin_ip: str) -> tuple[bool, str]:
-    """Return (risk, reason). Risk means this client could lose SSH."""
+    """Return (risk, reason). Risk means this client could lose SSH or its LAN path."""
     if not admin_ip:
         return True, "Client IP is unknown, so lockout cannot be ruled out."
     try:
@@ -72,27 +89,31 @@ def evaluate_lockout(policy: Policy, admin_ip: str) -> tuple[bool, str]:
     except ValueError:
         return True, "Client IP is not a literal address, so lockout cannot be ruled out."
 
+    blocked = _gateway_block(policy)
+    if blocked:
+        return True, blocked
+
     for cidr in policy.management_cidrs:
         network = ipaddress.ip_network(cidr, strict=False)
         if addr.version == network.version and addr in network:
-            return False, "Current client is inside a management CIDR that keeps SSH allowed."
+            return _safe(policy, "Current client is inside a management CIDR that keeps SSH allowed.")
 
     if policy.ssh_port in set(policy.excluded_ports):
-        return False, "SSH port is in excluded_ports and stays accepted ahead of the drop."
+        return _safe(policy, "SSH port is in excluded_ports and stays accepted ahead of the drop.")
 
     for cidr in policy.allow_cidrs:
         network = ipaddress.ip_network(cidr, strict=False)
         if addr.version == network.version and addr in network:
             if _explicitly_denied(policy, addr):
-                return False, "Current client is allowlisted; allowlist entries are accepted before bans and denies."
-            return False, "Current client is allowlisted."
+                return _safe(policy, "Current client is allowlisted; allowlist entries are accepted before bans and denies.")
+            return _safe(policy, "Current client is allowlisted.")
 
     for rule in policy.rules:
         if _matches_allow(rule, addr, policy.ssh_port):
-            return False, f"Rule {rule.name} allows SSH from the current client."
+            return _safe(policy, f"Rule {rule.name} allows SSH from the current client.")
 
     if policy.mode == "monitor" and not _explicitly_denied(policy, addr):
-        return False, "Monitor mode accepts this client because no deny or ban matches it."
+        return _safe(policy, "Monitor mode accepts this client because no deny or ban matches it.")
 
     if policy.mode == "monitor":
         return True, "Monitor mode would drop SSH from the current client."

@@ -20,6 +20,8 @@ services:
       PORT_WARDEN_HOST_PID: "1"
       PORT_WARDEN_NFT_BACKEND: local
       PORT_WARDEN_RESTORE_ON_START: "1"
+      PORT_WARDEN_NFT_LOG_PATH: ${PORT_WARDEN_NFT_LOG_PATH:-/var/log/host/kern.log}
+      PORT_WARDEN_PROBE_POLL_SECONDS: ${PORT_WARDEN_PROBE_POLL_SECONDS:-30}
       PORT_WARDEN_MANAGEMENT_CIDRS: ${PORT_WARDEN_MANAGEMENT_CIDRS:-127.0.0.1/32,::1/128}
       PORT_WARDEN_DATA_DIR: /var/lib/port-warden
       PORT_WARDEN_DATABASE_URL: sqlite:////var/lib/port-warden/port-warden.sqlite
@@ -31,6 +33,7 @@ services:
       PORT_WARDEN_ADMIN_PASSWORD: ${PORT_WARDEN_ADMIN_PASSWORD:-portwarden-change-me}
     volumes:
       - ./data:/var/lib/port-warden
+      - /var/log:/var/log/host:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -42,8 +45,11 @@ services:
       - SETUID
       - SETGID
       - NET_ADMIN
+      - NET_RAW
       - SYS_PTRACE
       - DAC_READ_SEARCH
+    devices:
+      - /dev/net/tun:/dev/net/tun
     pids_limit: 128
     mem_limit: 256m
     restart: unless-stopped

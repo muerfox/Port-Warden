@@ -21,6 +21,7 @@ from app.services.bruteforce.tracker import FailureTracker
 from app.services.events import purge_records
 from app.services.firewall.backend import AgentBackend, DisabledBackend, LocalBackend, load_agent_token
 from app.services.firewall.engine import FirewallEngine
+from app.services.traffic.probes import ProbePoller
 from app.web.routes import router as web_router
 
 STATIC_DIR = __import__("pathlib").Path(__file__).resolve().parent / "web" / "static"
@@ -100,7 +101,41 @@ def create_app(settings: Settings | None = None, backend=None) -> FastAPI:
             tail = LogTailer(Path(log_path), on_line)
             tail.start()
         app.state.tail = tail
+        probe_poller = None
+        if app.state.settings.nft_backend == "local":
+            probe_poller = ProbePoller(
+                app.state.session_factory,
+                app.state.settings,
+                app.state.engine.backend,
+                app.state.json_log,
+                poll_seconds=app.state.settings.probe_poll_seconds,
+            )
+            probe_poller.start()
+        app.state.probe_poller = probe_poller
+        failover = None
+        ips_watcher = None
+        if app.state.settings.nft_backend == "local":
+            from app.services.gateway.failover import FailoverPoller
+            from app.services.gateway.ips import IpsWatcher
+
+            failover = FailoverPoller(
+                app.state.session_factory,
+                app.state.settings,
+                app.state.engine,
+                app.state.json_log,
+            )
+            failover.start()
+            ips_watcher = IpsWatcher(app.state.session_factory, app.state.settings, app.state.json_log)
+            ips_watcher.start()
+        app.state.failover = failover
+        app.state.ips_watcher = ips_watcher
         yield
+        if ips_watcher is not None:
+            ips_watcher.stop()
+        if failover is not None:
+            failover.stop()
+        if probe_poller is not None:
+            probe_poller.stop()
         if tail is not None:
             tail.stop()
 

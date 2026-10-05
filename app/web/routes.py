@@ -5,14 +5,14 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import MfaRequired, authenticate, start_session
 from app.api.deps import client_ip, db_session, load_session
-from app.models import AuditLog, Ban, Event, Honeypot, IpList, IpListEntry, Rule
+from app.models import AuditLog, Ban, Event, Honeypot, IpList, IpListEntry, Rule, WgPeer
 from app.serialize import ban_dict, honeypot_dict, list_dict, rule_dict
 from app.services.events import audit_dict, event_dict, record_audit
 from app.services.firewall.presets import PRESETS, get_preset
@@ -33,6 +33,8 @@ from app.services.inventory.workspace import (
     panel_rows,
 )
 from app.services.records import add_entry, bf_config, create_ban, create_rule, lift_ban, save_bf_config_fields
+from app.services.gateway.state import gateway_view, list_interfaces, save_gateway
+from app.services.gateway.wireguard import add_peer, client_config_text
 from app.services.firewall.backend import NftError
 from app.services.firewall.engine import LockoutError, set_setting
 from app.timeutil import parse_form_datetime
@@ -53,6 +55,7 @@ _TITLES = {
     "audit.html": "Audit",
     "honeypots.html": "Honeypots",
     "firewall.html": "Firewall",
+    "gateway.html": "Gateway",
 }
 
 
@@ -136,7 +139,13 @@ def home(request: Request, db: Session = Depends(db_session)):
     firewall = request.app.state.engine.status(db)
     listeners = read_host_listeners()
     active = db.scalars(select(Ban).where(Ban.lifted_at.is_(None))).all()
-    traffic = port_attack_stats(db, request.app.state.settings, hours=24, limit=5)
+    traffic = port_attack_stats(
+        db,
+        request.app.state.settings,
+        hours=24,
+        limit=5,
+        backend=request.app.state.engine.backend,
+    )
     return _page(
         request,
         "status.html",
@@ -147,6 +156,7 @@ def home(request: Request, db: Session = Depends(db_session)):
         bruteforce=bf_config(db, request.app.state.settings),
         note=REACHABILITY_NOTE,
         traffic=traffic,
+        gateway=gateway_view(db),
     )
 
 
@@ -155,7 +165,13 @@ def traffic_page(request: Request, db: Session = Depends(db_session), hours: int
     session = _session_or_401(request, db)
     if hours not in {24, 72, 168}:
         hours = 24
-    stats = port_attack_stats(db, request.app.state.settings, hours=hours, limit=12)
+    stats = port_attack_stats(
+        db,
+        request.app.state.settings,
+        hours=hours,
+        limit=12,
+        backend=request.app.state.engine.backend,
+    )
     return _page(
         request,
         "traffic.html",
@@ -169,11 +185,18 @@ def traffic_page(request: Request, db: Session = Depends(db_session), hours: int
 def ports(request: Request, db: Session = Depends(db_session)):
     session = _session_or_401(request, db)
     settings = request.app.state.settings
+    traffic = port_attack_stats(
+        db,
+        settings,
+        hours=24,
+        limit=20,
+        backend=request.app.state.engine.backend,
+    )
     return _page(
         request,
         "ports.html",
         session,
-        listeners=panel_rows(db, settings),
+        listeners=panel_rows(db, settings, attack_stats=traffic),
         note=REACHABILITY_NOTE,
         warning=inventory_warning(
             host_network=settings.host_network,
@@ -183,6 +206,7 @@ def ports(request: Request, db: Session = Depends(db_session)):
         targets=settings.reachability_targets,
         ssh_port=effective_ssh_port(db, settings),
         open_ports=effective_open_ports(db, settings),
+        probes=[row for row in traffic.get("ports", []) if row.get("count")],
     )
 
 
@@ -745,3 +769,120 @@ def firewall_mode(
         src_ip=client_ip(request),
     )
     return _redirect("/firewall", "Mode stored. Preview and apply before it is enforced.")
+
+
+@router.get("/gateway")
+def gateway_page(request: Request, db: Session = Depends(db_session)):
+    session = _session_or_401(request, db)
+    settings = request.app.state.settings
+    return _page(
+        request,
+        "gateway.html",
+        session,
+        gateway=gateway_view(db),
+        interfaces=list_interfaces(settings.ip_bin),
+        suricata_rules=settings.suricata_rules,
+    )
+
+
+@router.post("/gateway")
+def gateway_save(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+    gateway_enabled: str = Form(""),
+    nat_enabled: str = Form(""),
+    wg_enabled: str = Form(""),
+    ips_enabled: str = Form(""),
+    wan_iface: str = Form(""),
+    wan_backup_iface: str = Form(""),
+    lan_ifaces: list[str] = Form(default=[]),
+    wan_gateway: str = Form(""),
+    wan_backup_gateway: str = Form(""),
+    wg_port: str = Form("51820"),
+    wg_address: str = Form("10.77.0.1/24"),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        save_gateway(
+            db,
+            enabled=gateway_enabled == "yes",
+            lan_ifaces=lan_ifaces,
+            wan_iface=wan_iface.strip(),
+            wan_backup_iface=wan_backup_iface.strip(),
+            nat_enabled=nat_enabled == "yes",
+            wg_enabled=wg_enabled == "yes",
+            wg_port=int(wg_port),
+            wg_address=wg_address.strip() or "10.77.0.1/24",
+            ips_enabled=ips_enabled == "yes",
+            wan_gateway=wan_gateway.strip(),
+            wan_backup_gateway=wan_backup_gateway.strip(),
+        )
+    except (ValueError, TypeError) as exc:
+        return _redirect("/gateway", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="gateway_save",
+        target="gateway",
+        src_ip=client_ip(request),
+    )
+    return _redirect("/gateway", "Gateway settings stored. Preview and Apply on the Firewall page before they take effect.")
+
+
+@router.post("/gateway/peers")
+def gateway_add_peer(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+    name: str = Form(""),
+    allowed_ips: str = Form(""),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        peer = add_peer(db, request.app.state.settings, name, allowed_ips)
+    except (ValueError, RuntimeError) as exc:
+        return _redirect("/gateway", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="wg_peer_add",
+        target=peer.name,
+        src_ip=client_ip(request),
+    )
+    return _redirect("/gateway", f"Peer {peer.name} created. Download its config once before leaving this page.")
+
+
+@router.post("/gateway/peers/{peer_id}/config")
+def gateway_peer_config(
+    peer_id: int,
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    peer = db.get(WgPeer, peer_id)
+    if peer is None:
+        raise HTTPException(status_code=404, detail="Peer not found")
+    try:
+        body = client_config_text(db, request.app.state.settings, peer)
+    except (ValueError, RuntimeError) as exc:
+        return _redirect("/gateway", str(exc))
+    peer.client_private = ""
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="wg_peer_config",
+        target=peer.name,
+        src_ip=client_ip(request),
+    )
+    return PlainTextResponse(
+        body,
+        headers={"Content-Disposition": f'attachment; filename="{peer.name}.conf"'},
+    )

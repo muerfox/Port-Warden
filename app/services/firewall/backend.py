@@ -59,6 +59,22 @@ class LocalBackend:
                 return ""
             raise
 
+    def list_set_json(self, set_name: str) -> dict | None:
+        """Return JSON for one set in table inet port_warden, or None if missing."""
+        if not set_name.replace("_", "").isalnum():
+            raise NftError("invalid set name")
+        try:
+            raw = self._run(["-j", "list", "set", "inet", "port_warden", set_name], None)
+        except NftError as exc:
+            text = str(exc).lower()
+            if "no such file" in text or "does not exist" in text or "not found" in text:
+                return None
+            raise
+        try:
+            return json.loads(raw) if raw.strip() else None
+        except json.JSONDecodeError as exc:
+            raise NftError("invalid nft JSON") from exc
+
     def _run(self, args: list[str], script: str | None) -> str:
         try:
             completed = subprocess.run(

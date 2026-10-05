@@ -2,7 +2,7 @@
 
 Port Warden is a defensive host firewall desk for a Linux server you administer. It keeps desired nftables policy in SQLite, shows host listening ports, records JSON events, and can temporarily ban SSH password-guessing. Honeypots are opt-in and do not run commands.
 
-Default Docker Compose uses the **host network**, **host PID** (`pid: host`), and the **local** nft backend so inventory sees host listeners and host process names (including SSH on 2222) and Apply installs `table inet port_warden` in front of inbound host traffic. Preview and confirm are still required before Apply. It is not `--privileged`.
+Default Docker Compose uses the **host network**, **host PID** (`pid: host`), and the **local** nft backend so inventory sees host listeners and host process names (including SSH on 2222) and Apply installs `table inet port_warden` in front of inbound host traffic. Preview and confirm are still required before Apply. It is not `--privileged`. Gateway forwarding, NAT, WireGuard, and Suricata IPS stay off until enabled on the Gateway page.
 
 ## Defaults
 
@@ -132,7 +132,7 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 ## Logs
 
-Events are JSON lines in `data/logs/port-warden.jsonl` with timestamp, event type, source IP, destination port, action, and rule id when there is one. Passwords and tokens are removed. Retention defaults to 30 days. Details are in [docs/DATA_MODEL.md](docs/DATA_MODEL.md). The HTTP API is [docs/API.md](docs/API.md).
+Events are JSON lines in `data/logs/port-warden.jsonl` with timestamp, event type, source IP, destination port, action, and rule id when there is one. Passwords and tokens are removed. Retention defaults to 30 days. After an enforce Apply, dropped destination ports are counted in nft `probe_*` sets and shown on Traffic / Ports (including ports that are not listening). Details are in [docs/DATA_MODEL.md](docs/DATA_MODEL.md). The HTTP API is [docs/API.md](docs/API.md).
 
 ## Honeypots
 

@@ -26,3 +26,7 @@ ban_auto_apply: false
 reachability_targets: []
 login_rate_limit: 5
 login_rate_window: 300
+suricata_bin: suricata
+suricata_rules: ""
+wg_bin: wg
+failover_seconds: 15

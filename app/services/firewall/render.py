@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -25,6 +26,19 @@ class RuleView:
 
 
 @dataclass
+class GatewayPolicy:
+    enabled: bool = False
+    lan_ifaces: list[str] = field(default_factory=list)
+    wan_iface: str = ""
+    wan_backup_iface: str = ""
+    active_wan: str = "primary"
+    nat_enabled: bool = False
+    wg_enabled: bool = False
+    ips_enabled: bool = False
+    ips_queue: int = 0
+
+
+@dataclass
 class Policy:
     mode: str
     management_cidrs: list[str]
@@ -34,6 +48,7 @@ class Policy:
     ban_cidrs: list[str]
     rules: list[RuleView] = field(default_factory=list)
     excluded_ports: list[int] = field(default_factory=list)
+    gateway: GatewayPolicy = field(default_factory=GatewayPolicy)
 
 
 @dataclass
@@ -89,6 +104,84 @@ def _port_match(protocol: str, ports: list[str]) -> str:
     if len(ports) == 1 and "-" not in ports[0]:
         return f"{protocol} dport {ports[0]}"
     return f"{protocol} dport {{ {', '.join(ports)} }}"
+
+
+_IFACE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,14}$")
+FWMARK = "0x7077"
+
+
+def validate_iface(name: str) -> str:
+    cleaned = (name or "").strip()
+    if not _IFACE.match(cleaned):
+        raise ValueError(f"invalid interface name {name!r}")
+    return cleaned
+
+
+def active_wan_iface(gateway: GatewayPolicy) -> str:
+    if gateway.active_wan == "backup" and gateway.wan_backup_iface:
+        return gateway.wan_backup_iface
+    return gateway.wan_iface
+
+
+def lan_iface_names(gateway: GatewayPolicy) -> list[str]:
+    names: list[str] = []
+    for name in gateway.lan_ifaces:
+        if name not in names:
+            names.append(name)
+    if gateway.wg_enabled and "wg0" not in names:
+        names.append("wg0")
+    return names
+
+
+def _ifname(keyword: str, names: list[str]) -> str:
+    cleaned = [validate_iface(name) for name in names if name]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return f'{keyword} "{cleaned[0]}"'
+    inner = ", ".join(f'"{name}"' for name in cleaned)
+    return f"{keyword} {{ {inner} }}"
+
+
+def _append_gateway(lines: list[str], policy: Policy, warnings: list[str]) -> None:
+    gateway = policy.gateway
+    if not gateway.enabled:
+        return
+    warnings.append(
+        "Gateway mode is on. ip_forward is set to 1 only after a successful Apply, not during Preview."
+    )
+    lans = lan_iface_names(gateway)
+    wan = active_wan_iface(gateway)
+    if not lans or not wan:
+        warnings.append("Gateway mode needs at least one LAN interface (or WireGuard) and a WAN interface.")
+        return
+    validate_iface(wan)
+    forward_policy = "drop" if policy.mode == "enforce" else "accept"
+    if policy.mode != "enforce":
+        warnings.append("Gateway monitor mode accepts forwarded packets that no rule matches.")
+    lan_match = _ifname("iifname", lans)
+    wan_out = _ifname("oifname", [wan])
+    wan_in = _ifname("iifname", [wan])
+    lines.append("    chain forward {")
+    lines.append(f"        type filter hook forward priority 0; policy {forward_policy};")
+    lines.append('        ct state invalid drop comment "pw:fwd-invalid"')
+    lines.append('        ct state established,related accept comment "pw:fwd-established"')
+    lines.append('        meta mark 0x00000001 accept comment "pw:ips-pass"')
+    lines.append(
+        f'        {lan_match} {wan_out} meta mark set {FWMARK} accept comment "pw:lan-wan"'
+    )
+    if gateway.ips_enabled:
+        lines.append(
+            f'        {wan_in} ct state new queue num {int(gateway.ips_queue)} comment "pw:ips"'
+        )
+    else:
+        lines.append(f'        {wan_in} ct state new drop comment "pw:wan-new"')
+    lines.append("    }")
+    if gateway.nat_enabled:
+        lines.append("    chain postrouting {")
+        lines.append("        type nat hook postrouting priority 100; policy accept;")
+        lines.append(f'        {lan_match} {wan_out} masquerade comment "pw:nat"')
+        lines.append("    }")
 
 
 def _comment(name: str, text: str) -> str:
@@ -169,6 +262,19 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
     lines.append(_set_block("deny_v6", 6, deny_v6))
     lines.append(_set_block("ban_v4", 4, ban_v4))
     lines.append(_set_block("ban_v6", 6, ban_v6))
+    # Dynamic probe sets: every dropped TCP/UDP dport is counted so Traffic can
+    # show scan pressure without relying on host syslog mounts.
+    if policy.mode == "enforce":
+        for name in ("probe_tcp", "probe_udp"):
+            lines.append(
+                f"    set {name} {{\n"
+                f"        type inet_service\n"
+                f"        size 65535\n"
+                f"        flags dynamic,timeout\n"
+                f"        timeout 24h\n"
+                f"        counter\n"
+                f"    }}"
+            )
     lines.append("    chain input {")
     lines.append(f"        type filter hook input priority -10; policy {policy_verdict};")
     lines.append('        ct state invalid drop comment "pw:invalid"')
@@ -217,9 +323,14 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
     for rule in inbound:
         lines.append(render_named_rule(rule))
     if policy.mode == "enforce":
-        lines.append(
-            '        limit rate 10/second log prefix "pw:drop " drop comment "pw:log-drop"'
-        )
+        # Count every drop in probe_* sets, rate-limit kernel log noise, then drop.
+        lines.append('        meta l4proto tcp add @probe_tcp { tcp dport } comment "pw:probe-tcp"')
+        lines.append('        meta l4proto tcp limit rate 10/second log prefix "pw:drop " comment "pw:log-drop"')
+        lines.append('        meta l4proto tcp drop comment "pw:drop-tcp"')
+        lines.append('        meta l4proto udp add @probe_udp { udp dport } comment "pw:probe-udp"')
+        lines.append('        meta l4proto udp limit rate 10/second log prefix "pw:drop " comment "pw:log-drop-udp"')
+        lines.append('        meta l4proto udp drop comment "pw:drop-udp"')
+        lines.append('        limit rate 5/second log prefix "pw:drop " drop comment "pw:log-drop-other"')
     lines.append("    }")
     if outbound:
         lines.append("    chain output {")
@@ -228,6 +339,7 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
         for rule in outbound:
             lines.append(render_named_rule(rule))
         lines.append("    }")
+    _append_gateway(lines, policy, warnings)
     lines.append("}")
     script = "\n".join(line for line in lines if line != "") + "\n"
     assert_safe_script(script)

@@ -134,4 +134,4 @@ def test_dashboard_login(client):
     assert signed.status_code == 303
     home = client.get("/")
     assert home.status_code == 200
-    assert "Host firewall desk" in home.text
+    assert "Host and gateway firewall" in home.text
