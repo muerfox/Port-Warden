@@ -49,6 +49,22 @@ def create_app(settings: Settings | None = None, backend=None) -> FastAPI:
             purge_records(db, app.state.settings.log_retention_days)
             app.state.json_log.purge()
             app.state.engine.load_last_good(db)
+            if (
+                app.state.settings.restore_on_start
+                and app.state.engine.enforces
+                and app.state.engine.last_good
+            ):
+                try:
+                    app.state.engine.backend.apply(app.state.engine.last_good)
+                except Exception as exc:  # noqa: BLE001
+                    app.state.json_log.emit(
+                        "firewall_restore_failed",
+                        action="failed",
+                        src_ip="",
+                        dst_port="",
+                        rule_id="",
+                        error=str(exc)[:300],
+                    )
             db.commit()
         finally:
             db.close()

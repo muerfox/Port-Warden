@@ -16,6 +16,12 @@ from app.models import AuditLog, Ban, Event, Honeypot, IpList, IpListEntry, Rule
 from app.serialize import ban_dict, honeypot_dict, list_dict, rule_dict
 from app.services.events import audit_dict, event_dict, record_audit
 from app.services.firewall.presets import PRESETS, get_preset
+from app.services.firewall.protections import (
+    disable_protection,
+    enable_protection,
+    enable_recommended,
+    list_protection_status,
+)
 from app.services.honeypot_store import read_telemetry, write_desired
 from app.services.analytics.ports import port_attack_stats
 from app.services.inventory.ports import REACHABILITY_NOTE, inventory_warning, read_host_listeners
@@ -39,6 +45,7 @@ _TITLES = {
     "status.html": "Status",
     "ports.html": "Ports",
     "traffic.html": "Traffic",
+    "protections.html": "Protections",
     "rules.html": "Rules",
     "lists.html": "Allow and deny lists",
     "bans.html": "Bans",
@@ -221,6 +228,85 @@ def ports_close(
         src_ip=client_ip(request),
     )
     return _redirect("/ports", f"Port {port} will drop in enforce after Apply.")
+
+
+@router.get("/protections")
+def protections_page(request: Request, db: Session = Depends(db_session)):
+    session = _session_or_401(request, db)
+    return _page(
+        request,
+        "protections.html",
+        session,
+        packs=list_protection_status(db),
+    )
+
+
+@router.post("/protections/enable-recommended")
+def protections_enable_recommended(
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    enable_recommended(db)
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="protections_enable_recommended",
+        target="recommended",
+        src_ip=client_ip(request),
+    )
+    return _redirect("/protections", "Recommended protections enabled in desired rules. Preview/Apply on Firewall.")
+
+
+@router.post("/protections/{pack_id}/enable")
+def protections_enable(
+    pack_id: str,
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        enable_protection(db, pack_id)
+    except ValueError as exc:
+        return _redirect("/protections", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="protection_enable",
+        target=pack_id,
+        src_ip=client_ip(request),
+    )
+    return _redirect("/protections", f"Protection '{pack_id}' enabled in desired rules. Preview/Apply on Firewall.")
+
+
+@router.post("/protections/{pack_id}/disable")
+def protections_disable(
+    pack_id: str,
+    request: Request,
+    db: Session = Depends(db_session),
+    csrf_token: str = Form(""),
+):
+    session = _session_or_401(request, db)
+    _csrf(request, session, csrf_token)
+    try:
+        disable_protection(db, pack_id)
+    except ValueError as exc:
+        return _redirect("/protections", str(exc))
+    record_audit(
+        db,
+        request.app.state.json_log,
+        actor=session.user.username,
+        action="protection_disable",
+        target=pack_id,
+        src_ip=client_ip(request),
+    )
+    return _redirect("/protections", f"Protection '{pack_id}' removed from desired rules. Preview/Apply on Firewall.")
 
 
 @router.get("/rules")

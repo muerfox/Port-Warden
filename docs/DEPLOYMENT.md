@@ -59,7 +59,29 @@ Dashboard-only (no host firewall): `docker compose -f docker-compose.dashboard.y
 
 `--privileged` is not required. Do not use it.
 
-Stopping the container leaves any previously applied `inet port_warden` table in the kernel.
+Stopping the container leaves any previously applied `inet port_warden` table in the kernel. A reboot clears kernel tables. With `PORT_WARDEN_RESTORE_ON_START=1` (the Compose default), the next start reinstalls `data/last-good.nft` only after an administrator has applied once. Host installs can also enable `deploy/port-warden-firewall.service`, which runs `scripts/restore-last-good.sh` before the network is fully online.
+
+## Production baseline
+
+Enforce mode is a host input filter at nftables priority `-10`. It is meant for a generic Linux server, not a single distribution:
+
+- Invalid state is dropped. Established and related traffic is accepted. Loopback is accepted.
+- ICMP errors, IPv6 neighbor discovery, rate-limited ping, and DHCP client replies stay open so address configuration and path MTU keep working.
+- Management SSH is limited to `PORT_WARDEN_MANAGEMENT_CIDRS` on the auto-detected sshd port.
+- Ports you keep open, protection packs, allow/deny lists, and named rules follow.
+- Everything else is logged (rate-limited) and dropped.
+- Only table `inet port_warden` is replaced. firewalld, ufw, and cloud security groups are not removed.
+- The first Apply is still an explicit preview. Startup never invents a new policy.
+
+Install nftables (`nft`) on the host. If firewalld is active, this table still runs earlier at priority `-10`. Read both before the first enforce Apply.
+
+```bash
+sudo install -d -m 700 /var/lib/port-warden
+sudo cp deploy/port-warden-firewall.service /etc/systemd/system/
+sudo systemctl enable --now port-warden-firewall.service
+```
+
+Point that unit at the same `last-good.nft` the app writes (`PORT_WARDEN_DATA_DIR`, default `./data` or `/var/lib/port-warden` in Compose).
 
 ## Apply and roll back
 

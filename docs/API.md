@@ -22,6 +22,10 @@ If MFA is enabled and `totp` is omitted, login returns `{"mfa_required": true}` 
 | Method | Path |
 | --- | --- |
 | GET | `/api/v1/presets` |
+| GET | `/api/v1/protections` |
+| POST | `/api/v1/protections/{id}/enable` |
+| POST | `/api/v1/protections/{id}/disable` |
+| POST | `/api/v1/protections/enable-recommended` |
 | GET/POST | `/api/v1/rules` |
 | PATCH/DELETE | `/api/v1/rules/{id}` |
 | GET/POST | `/api/v1/lists` |

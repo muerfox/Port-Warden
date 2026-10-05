@@ -124,6 +124,7 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 - Named rules support address, protocol, ports, direction, comment, expiry, and priority.
 - Presets fill a form. They do not open ports.
 - The Ports panel shows process and service for each listener. Keep open what should stay reachable. SSH is auto-detected from `sshd`. The UI bind port stays open automatically.
+- Protections packs add early deny rules for Telnet, FTP, SQL/cache, mail, RPC/NFS, and common admin APIs. Enable them on the Protections page, then Preview/Apply.
 - Allowlist and management addresses cannot be banned.
 - Apply from an SSH client that the new policy would drop requires the confirmation phrase.
 - If `nft` fails after a previous good apply, the last good script is installed again.

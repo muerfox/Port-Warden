@@ -9,6 +9,7 @@ Port Warden is a single-host firewall desk. Desired state is stored in SQLite. n
 - Default Docker Compose uses host network, `nft_backend: local`, and `CAP_NET_ADMIN` so inventory and Apply operate on the host. A bridge-only dashboard file remains for non-enforcing installs. The host-agent Unix helper is still available when you prefer not to give the API `NET_ADMIN`.
 - The management UI binds to loopback unless `expose_public` is set. Docker Compose listens on `0.0.0.0:9090` as HTTPS with a 10-year self-signed certificate from the image build.
 - Listening ports are discovered from the host with process/service labels (`ss -p` and `/proc`). Operators keep ports open in the Ports panel; SSH is auto-detected from `sshd`. Choices are stored in SQLite and rendered into the nftables policy. The UI bind port is always kept open.
+- Protection packs install early deny rules for common high-risk services (Telnet, FTP, databases, mail, RPC/NFS, Docker/K8s APIs). They update desired state only until Apply.
 - Env `excluded_ports` / `ssh_port` are optional fallbacks when live detection is unavailable.
 
 ## Components
@@ -32,13 +33,15 @@ Input chain order:
 1. Drop invalid connection tracking state.
 2. Accept established and related traffic.
 3. Accept loopback.
-4. Accept management CIDRs to the configured SSH port.
-5. Accept excluded inbound TCP ports.
-6. Accept allowlist entries.
-7. Drop denylist entries that do not contain a protected range.
-8. Drop bans that do not contain a protected or allowlisted range.
-9. Named rules, lowest priority number first.
-10. Enforce mode policy is drop. Monitor mode policy is accept.
+4. Accept IPv4/IPv6 ICMP needed for errors and path MTU, rate-limited echo requests, and IPv6 neighbor discovery.
+5. Accept DHCP client replies (DHCPv4 and DHCPv6).
+6. Accept management CIDRs to the configured SSH port.
+7. Accept excluded inbound TCP ports.
+8. Accept allowlist entries.
+9. Drop denylist entries that do not contain a protected range.
+10. Drop bans that do not contain a protected or allowlisted range.
+11. Named rules, lowest priority number first.
+12. Enforce mode logs and drops what remains. Monitor mode policy is accept.
 
 Stopping the API does not remove the table. Startup does not install or flush rules. A failed apply reinstalls the last good script when one exists.
 

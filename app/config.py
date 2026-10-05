@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     ssl_certfile: str = ""
     ssl_keyfile: str = ""
+    # Reinstall the last confirmed nftables table when this process starts.
+    # No-op until an administrator has applied once. Does not invent a new policy.
+    restore_on_start: bool = True
     session_hours: int = 12
     database_url: str = "sqlite:///./data/port-warden.sqlite"
     data_dir: Path = Path("./data")

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Common protections install early deny rules for services that should not face the internet. Enabling a pack updates desired rules only — open Firewall and Apply to put them on the host.</p>
+<p class="note">If you need a protected service from a trusted network, add an allow rule with a lower priority number (for example 10) and a source CIDR before Apply.</p>
+
+<form method="post" action="/protections/enable-recommended">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit">Enable recommended packs</button>
+</form>
+
+<table>
+  <thead>
+    <tr><th>Protection</th><th>Status</th><th>Rules</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for pack in packs %}
+    <tr>
+      <td>
+        <strong>{{ pack.title }}</strong>
+        {% if pack.recommended %}<span class="note">recommended</span>{% endif %}
+        <p class="note">{{ pack.summary }}</p>
+      </td>
+      <td>{% if pack.enabled %}<span class="ok">enabled</span>{% else %}off{% endif %}</td>
+      <td><code>{{ pack.rule_names | join(", ") }}</code></td>
+      <td class="actions">
+        {% if pack.enabled %}
+        <form method="post" action="/protections/{{ pack.id }}/disable">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="quiet" type="submit">Disable</button>
+        </form>
+        {% else %}
+        <form method="post" action="/protections/{{ pack.id }}/enable">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit">Enable</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

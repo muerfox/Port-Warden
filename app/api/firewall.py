@@ -11,6 +11,12 @@ from app.serialize import entry_dict, list_dict, rule_dict
 from app.services.events import record_audit
 from app.services.firewall.engine import set_setting
 from app.services.firewall.presets import PRESETS
+from app.services.firewall.protections import (
+    disable_protection,
+    enable_protection,
+    enable_recommended,
+    list_protection_status,
+)
 from app.services.records import add_entry, create_list, create_rule, update_rule
 
 router = APIRouter(tags=["firewall"])
@@ -27,6 +33,72 @@ def presets(request: Request, db: Session = Depends(db_session)):
         "presets": PRESETS,
         "note": "Presets are templates. Saving a preset is a separate action and does not open a port by itself.",
     }
+
+
+@router.get("/protections")
+def protections(request: Request, db: Session = Depends(db_session)):
+    require_user(request, db)
+    return {
+        "packs": list_protection_status(db),
+        "note": "Protection packs install deny rules into desired state. Preview/Apply is still required.",
+    }
+
+
+@router.post("/protections/enable-recommended")
+def protections_enable_recommended(request: Request, db: Session = Depends(db_session)):
+    session = require_user(request, db)
+
+    def act():
+        result = enable_recommended(db)
+        record_audit(
+            db,
+            request.app.state.json_log,
+            actor=session.user.username,
+            action="protections_enable_recommended",
+            target="recommended",
+            src_ip=client_ip(request),
+        )
+        return result
+
+    return api_error(act)
+
+
+@router.post("/protections/{pack_id}/enable")
+def protections_enable(pack_id: str, request: Request, db: Session = Depends(db_session)):
+    session = require_user(request, db)
+
+    def act():
+        result = enable_protection(db, pack_id)
+        record_audit(
+            db,
+            request.app.state.json_log,
+            actor=session.user.username,
+            action="protection_enable",
+            target=pack_id,
+            src_ip=client_ip(request),
+        )
+        return result
+
+    return api_error(act)
+
+
+@router.post("/protections/{pack_id}/disable")
+def protections_disable(pack_id: str, request: Request, db: Session = Depends(db_session)):
+    session = require_user(request, db)
+
+    def act():
+        result = disable_protection(db, pack_id)
+        record_audit(
+            db,
+            request.app.state.json_log,
+            actor=session.user.username,
+            action="protection_disable",
+            target=pack_id,
+            src_ip=client_ip(request),
+        )
+        return result
+
+    return api_error(act)
 
 
 @router.get("/rules")

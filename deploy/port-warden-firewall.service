@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore Port Warden nftables table
+Documentation=https://github.com/muerfox/Port-Warden
+After=network-pre.target
+Before=network-online.target
+ConditionPathExists=/var/lib/port-warden/last-good.nft
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/port-warden/scripts/restore-last-good.sh /var/lib/port-warden/last-good.nft
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
-<p class="lede">Preview shows the nftables transaction. Apply is a separate confirmation. With the default backend, apply only stores a snapshot.</p>
+<p class="lede">Preview shows the nftables transaction. Apply is a separate confirmation. Enforce mode keeps ICMP, IPv6 neighbor discovery, and DHCP client replies, then drops other new inbound traffic.</p>
 <p>Management SSH stays open for {{ management | join(", ") }} on tcp/{{ ssh_port }}.</p>
 <p>Open ports chosen on the Ports panel stay accepted ahead of denylist, bans, and the default drop: {{ open_ports | join(", ") }}.</p>
 <p>Installed: {{ "yes" if status_info.installed else "no" }}. Drift: {{ "yes" if status_info.drift else "no" }}. Backend: {{ status_info.backend }}.</p>

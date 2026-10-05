@@ -174,6 +174,25 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
     lines.append('        ct state invalid drop comment "pw:invalid"')
     lines.append('        ct state established,related accept comment "pw:established"')
     lines.append('        iifname "lo" accept comment "pw:loopback"')
+    # Host essentials. A drop policy at priority -10 would otherwise break
+    # addressing, IPv6, and path MTU discovery on a normal Linux system.
+    lines.append(
+        '        icmp type { destination-unreachable, time-exceeded, parameter-problem } '
+        'accept comment "pw:icmp-essential"'
+    )
+    lines.append(
+        '        icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, '
+        'nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect } '
+        'accept comment "pw:icmpv6-essential"'
+    )
+    lines.append(
+        '        icmp type echo-request limit rate 5/second accept comment "pw:ping"'
+    )
+    lines.append(
+        '        icmpv6 type echo-request limit rate 5/second accept comment "pw:ping6"'
+    )
+    lines.append('        udp sport 67 udp dport 68 accept comment "pw:dhcpv4"')
+    lines.append('        udp sport 547 udp dport 546 accept comment "pw:dhcpv6"')
     for cidr in policy.management_cidrs:
         family, shown = _family(cidr)
         lines.append(
@@ -197,6 +216,10 @@ def render_policy(policy: Policy, now: datetime) -> Rendered:
         lines.append('        ip6 saddr @ban_v6 drop comment "pw:bans"')
     for rule in inbound:
         lines.append(render_named_rule(rule))
+    if policy.mode == "enforce":
+        lines.append(
+            '        limit rate 10/second log prefix "pw:drop " drop comment "pw:log-drop"'
+        )
     lines.append("    }")
     if outbound:
         lines.append("    chain output {")
