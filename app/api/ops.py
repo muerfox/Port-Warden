@@ -15,6 +15,7 @@ from app.services.bruteforce.observe import observe_line
 from app.services.events import audit_dict as _audit_dict
 from app.services.events import event_dict, record_audit, record_event
 from app.services.honeypot_store import read_telemetry, write_desired
+from app.services.analytics.ports import port_attack_stats
 from app.services.inventory.ports import (
     REACHABILITY_NOTE,
     check_reachability,
@@ -212,6 +213,17 @@ def reachability(body: ReachabilityIn, request: Request, db: Session = Depends(d
         return result
 
     return api_error(act)
+
+
+@router.get("/analytics/ports")
+def analytics_ports(
+    request: Request,
+    db: Session = Depends(db_session),
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=12, ge=1, le=50),
+):
+    require_user(request, db)
+    return port_attack_stats(db, request.app.state.settings, hours=hours, limit=limit)
 
 
 @router.get("/events")

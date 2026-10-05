@@ -50,6 +50,7 @@ Apply with the disabled backend returns `"applied": false`.
 | POST | `/api/v1/bruteforce/ingest` |
 | GET | `/api/v1/inventory/ports` |
 | POST | `/api/v1/inventory/reachability` |
+| GET | `/api/v1/analytics/ports` |
 | GET | `/api/v1/events` |
 | GET | `/api/v1/events/export` |
 | GET | `/api/v1/audit` |

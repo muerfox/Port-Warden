@@ -17,6 +17,7 @@ from app.serialize import ban_dict, honeypot_dict, list_dict, rule_dict
 from app.services.events import audit_dict, event_dict, record_audit
 from app.services.firewall.presets import PRESETS, get_preset
 from app.services.honeypot_store import read_telemetry, write_desired
+from app.services.analytics.ports import port_attack_stats
 from app.services.inventory.ports import REACHABILITY_NOTE, inventory_warning, read_host_listeners
 from app.services.inventory.workspace import (
     close_port,
@@ -24,7 +25,6 @@ from app.services.inventory.workspace import (
     effective_ssh_port,
     keep_port_open,
     panel_rows,
-    set_management_ssh,
 )
 from app.services.records import add_entry, bf_config, create_ban, create_rule, lift_ban, save_bf_config_fields
 from app.services.firewall.backend import NftError
@@ -38,6 +38,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "tem
 _TITLES = {
     "status.html": "Status",
     "ports.html": "Ports",
+    "traffic.html": "Traffic",
     "rules.html": "Rules",
     "lists.html": "Allow and deny lists",
     "bans.html": "Bans",
@@ -128,6 +129,7 @@ def home(request: Request, db: Session = Depends(db_session)):
     firewall = request.app.state.engine.status(db)
     listeners = read_host_listeners()
     active = db.scalars(select(Ban).where(Ban.lifted_at.is_(None))).all()
+    traffic = port_attack_stats(db, request.app.state.settings, hours=24, limit=5)
     return _page(
         request,
         "status.html",
@@ -137,6 +139,22 @@ def home(request: Request, db: Session = Depends(db_session)):
         ban_count=len(list(active)),
         bruteforce=bf_config(db, request.app.state.settings),
         note=REACHABILITY_NOTE,
+        traffic=traffic,
+    )
+
+
+@router.get("/traffic")
+def traffic_page(request: Request, db: Session = Depends(db_session), hours: int = 24):
+    session = _session_or_401(request, db)
+    if hours not in {24, 72, 168}:
+        hours = 24
+    stats = port_attack_stats(db, request.app.state.settings, hours=hours, limit=12)
+    return _page(
+        request,
+        "traffic.html",
+        session,
+        stats=stats,
+        hours=hours,
     )
 
 
@@ -203,33 +221,6 @@ def ports_close(
         src_ip=client_ip(request),
     )
     return _redirect("/ports", f"Port {port} will drop in enforce after Apply.")
-
-
-@router.post("/ports/management-ssh")
-def ports_management_ssh(
-    request: Request,
-    db: Session = Depends(db_session),
-    csrf_token: str = Form(""),
-    port: int = Form(...),
-):
-    session = _session_or_401(request, db)
-    _csrf(request, session, csrf_token)
-    try:
-        set_management_ssh(db, port)
-    except ValueError as exc:
-        return _redirect("/ports", str(exc))
-    record_audit(
-        db,
-        request.app.state.json_log,
-        actor=session.user.username,
-        action="port_management_ssh",
-        target=str(port),
-        src_ip=client_ip(request),
-    )
-    return _redirect(
-        "/ports",
-        f"Port {port} is management SSH for management CIDRs only. Use Keep open if the world should reach it too.",
-    )
 
 
 @router.get("/rules")

@@ -10,9 +10,11 @@ from app.config import Settings
 from app.services.inventory.ports import (
     check_reachability,
     classify_address,
+    detect_ssh_ports,
     inventory_warning,
     parse_proc_net,
     parse_ss,
+    service_label,
 )
 from app.services.inventory.workspace import (
     close_port,
@@ -20,20 +22,29 @@ from app.services.inventory.workspace import (
     effective_open_ports,
     effective_ssh_port,
     keep_port_open,
-    set_management_ssh,
 )
 
 
 def test_ss_and_proc_classification():
     rows = parse_ss(
         "tcp LISTEN 0 128 127.0.0.1:8443 0.0.0.0:*\n"
-        "tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\n"
+        'tcp LISTEN 0 128 0.0.0.0:2222 0.0.0.0:* users:(("sshd",pid=847,fd=3))\n'
+        'tcp LISTEN 0 128 0.0.0.0:80 0.0.0.0:* users:(("nginx",pid=900,fd=6))\n'
         "tcp ESTAB 0 0 10.1.1.1:22 203.0.113.2:50000\n"
     )
     scopes = {(row["port"], row["scope"]) for row in rows}
     assert (8443, "local") in scopes
-    assert (22, "all_interfaces") in scopes
+    assert (2222, "all_interfaces") in scopes
     assert all(row["port"] != 50000 for row in rows)
+    by_port = {row["port"]: row for row in rows}
+    assert by_port[2222]["process"] == "sshd"
+    assert by_port[2222]["pid"] == 847
+    assert by_port[2222]["service"] == "SSH"
+    assert by_port[2222]["is_ssh"] is True
+    assert by_port[80]["service"] == "HTTP"
+    assert detect_ssh_ports(rows) == [2222]
+    assert service_label("docker-proxy") == "Docker publish"
+    assert effective_ssh_port(None, Settings(secret_key="x" * 16, ssh_port=22), rows) == 2222
 
     proc = (
         "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"
@@ -106,9 +117,6 @@ def test_ports_panel_keeps_discovered_ports(settings, app):
         keep_port_open(db, settings, 443)
         db.commit()
         assert effective_open_ports(db, settings) == [443, 2222, 9090]
-        set_management_ssh(db, 2222)
-        db.commit()
-        assert effective_ssh_port(db, settings) == 2222
         close_port(db, settings, 443)
         db.commit()
         assert effective_open_ports(db, settings) == [2222, 9090]
@@ -144,15 +152,13 @@ def test_ports_panel_actions_via_ui(auth, app):
     app.state.settings.bind_port = 9090
     page = auth.get("/ports")
     assert page.status_code == 200
-    assert b"Keep open" in page.content or b"listeners" in page.content or b"No listeners" in page.content
+    assert b"Service" in page.content
+    assert b"Process" in page.content
     keep = auth.post("/ports/keep-open", data={"port": "2222", "csrf_token": auth.headers["X-CSRF-Token"]})
     assert keep.status_code in {302, 303}
-    ssh = auth.post("/ports/management-ssh", data={"port": "2222", "csrf_token": auth.headers["X-CSRF-Token"]})
-    assert ssh.status_code in {302, 303}
     db = app.state.session_factory()
     try:
         assert 2222 in effective_open_ports(db, app.state.settings)
-        assert effective_ssh_port(db, app.state.settings) == 2222
     finally:
         db.close()
 

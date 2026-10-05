@@ -21,7 +21,7 @@ firewalld and iptables are not adapters in this version. Cloud security groups a
 ## Layout
 
 ```text
-app/                 API, UI, firewall, bans, inventory
+app/                 API, UI, firewall, bans, inventory, traffic graphs
 honeypots/decoy.py   low-interaction SSH and HTTP decoys
 host-agent/          optional root helper that applies only this table
 docs/                architecture, threat model, API, deployment, checklist
@@ -91,7 +91,7 @@ Use this path on a clean machine. The image build creates a self-signed certific
 6. Put the firewall in front of the host.
 
    1. Open **Ports**. Confirm it shows host listeners.
-   2. For each service that should stay reachable, click **Keep open**. For sshd click **Set as SSH**.
+   2. For each service that should stay reachable, click **Keep open**. SSH is auto-detected from the `sshd` process.
    3. Firewall → Preview → read the lockout warning → Apply.
    4. Enforce mode drops inbound traffic that is not established, loopback, management SSH, allowlisted, kept open, or matched by an allow rule.
 
@@ -123,7 +123,7 @@ UI: `http://127.0.0.1:8443/`. Tests: `.venv/bin/pytest`.
 
 - Named rules support address, protocol, ports, direction, comment, expiry, and priority.
 - Presets fill a form. They do not open ports.
-- Open ports and the management SSH port are chosen on the Ports panel from discovered listeners. The UI bind port stays open automatically.
+- The Ports panel shows process and service for each listener. Keep open what should stay reachable. SSH is auto-detected from `sshd`. The UI bind port stays open automatically.
 - Allowlist and management addresses cannot be banned.
 - Apply from an SSH client that the new policy would drop requires the confirmation phrase.
 - If `nft` fails after a previous good apply, the last good script is installed again.

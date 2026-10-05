@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ipaddress
+import os
+import re
 import socket
 import subprocess
 from pathlib import Path
@@ -17,6 +19,28 @@ REACHABILITY_NOTE = (
     "Routers, NAT, cloud security groups, and upstream firewalls can block or expose the port."
 )
 
+_USERS = re.compile(r'users:\(\("(?P<name>[^"]+)",pid=(?P<pid>\d+)', re.IGNORECASE)
+
+# process name pattern → human service label
+_SERVICE_HINTS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^(sshd|ssh)$", re.I), "SSH"),
+    (re.compile(r"sshd", re.I), "SSH"),
+    (re.compile(r"^(nginx|apache2?|httpd|caddy|traefik|haproxy)$", re.I), "HTTP"),
+    (re.compile(r"docker-proxy", re.I), "Docker publish"),
+    (re.compile(r"containerd|dockerd", re.I), "Docker"),
+    (re.compile(r"^(postgres|postmaster)$", re.I), "PostgreSQL"),
+    (re.compile(r"^mysqld?", re.I), "MySQL/MariaDB"),
+    (re.compile(r"^redis-server$", re.I), "Redis"),
+    (re.compile(r"^mongod$", re.I), "MongoDB"),
+    (re.compile(r"^(named|systemd-resolve|dnsmasq)$", re.I), "DNS"),
+    (re.compile(r"^(ntpd|chronyd)$", re.I), "NTP"),
+    (re.compile(r"^(smtp|master|postfix|exim)", re.I), "Mail"),
+    (re.compile(r"^python", re.I), "Python"),
+    (re.compile(r"^node$", re.I), "Node.js"),
+    (re.compile(r"^java$", re.I), "Java"),
+    (re.compile(r"^systemd$", re.I), "systemd"),
+]
+
 
 def classify_address(address: str) -> str:
     if address in {"0.0.0.0", "::", "*"}:
@@ -29,8 +53,34 @@ def classify_address(address: str) -> str:
     return "public_address"
 
 
-def _row(protocol: str, address: str, port: int) -> dict:
+def service_label(process: str, port: int | None = None) -> str:
+    name = (process or "").strip()
+    if not name:
+        return "unknown"
+    base = Path(name).name
+    for pattern, label in _SERVICE_HINTS:
+        if pattern.search(base) or pattern.search(name):
+            return label
+    if port == 22:
+        return "likely SSH"
+    return base
+
+
+def is_ssh_process(process: str) -> bool:
+    return service_label(process) == "SSH"
+
+
+def _row(
+    protocol: str,
+    address: str,
+    port: int,
+    *,
+    process: str = "",
+    pid: int | None = None,
+    inode: int | None = None,
+) -> dict:
     kind = classify_address(address)
+    proc = process or ""
     return {
         "protocol": protocol,
         "address": address,
@@ -38,6 +88,11 @@ def _row(protocol: str, address: str, port: int) -> dict:
         "scope": kind,
         "scope_label": CLASS_LABELS[kind],
         "possibly_public": kind in {"all_interfaces", "public_address"},
+        "process": proc,
+        "pid": pid,
+        "inode": inode,
+        "service": service_label(proc, port),
+        "is_ssh": is_ssh_process(proc),
     }
 
 
@@ -47,6 +102,13 @@ def split_host_port(value: str) -> tuple[str, int]:
         return host, int(port)
     host, _, port = value.rpartition(":")
     return host, int(port)
+
+
+def _process_from_users(text: str) -> tuple[str, int | None]:
+    match = _USERS.search(text)
+    if not match:
+        return "", None
+    return match.group("name"), int(match.group("pid"))
 
 
 def parse_ss(text: str) -> list[dict]:
@@ -66,7 +128,8 @@ def parse_ss(text: str) -> list[dict]:
             address, port = split_host_port(parts[4])
         except ValueError:
             continue
-        rows.append(_row(protocol, address, port))
+        process, pid = _process_from_users(line)
+        rows.append(_row(protocol, address, port, process=process, pid=pid))
     return rows
 
 
@@ -85,31 +148,117 @@ def parse_proc_net(text: str, ipv6: bool) -> list[dict]:
     rows = []
     for line in text.splitlines()[1:]:
         parts = line.split()
-        if len(parts) < 4:
+        if len(parts) < 10:
             continue
         local, _remote, state = parts[1], parts[2], parts[3]
         if state != "0A":
             continue
         hexip, hexport = local.split(":", 1)
         address = _decode_ipv6(hexip) if ipv6 else _decode_ipv4(hexip)
-        rows.append(_row("tcp", address, int(hexport, 16)))
+        try:
+            inode = int(parts[9])
+        except ValueError:
+            inode = None
+        rows.append(_row("tcp", address, int(hexport, 16), inode=inode))
     return rows
+
+
+def _cmdline(pid: int) -> str:
+    try:
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return ""
+    text = raw.replace(b"\x00", b" ").decode("utf-8", "replace").strip()
+    if not text:
+        try:
+            text = Path(f"/proc/{pid}/comm").read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return ""
+    return text.split()[0] if text else ""
+
+
+def inode_process_map() -> dict[int, tuple[str, int]]:
+    """Map socket inode → (process, pid) by walking /proc/*/fd when readable."""
+    found: dict[int, tuple[str, int]] = {}
+    proc = Path("/proc")
+    try:
+        entries = list(proc.iterdir())
+    except OSError:
+        return found
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        fd_dir = entry / "fd"
+        try:
+            fds = list(fd_dir.iterdir())
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                target = os.readlink(fd)
+            except OSError:
+                continue
+            if not target.startswith("socket:["):
+                continue
+            try:
+                inode = int(target[8:-1])
+            except ValueError:
+                continue
+            if inode in found:
+                continue
+            name = _cmdline(pid) or f"pid:{pid}"
+            found[inode] = (Path(name).name, pid)
+    return found
+
+
+def enrich_with_inodes(rows: list[dict]) -> list[dict]:
+    if not rows or all(row.get("process") for row in rows):
+        return rows
+    mapping = inode_process_map()
+    if not mapping:
+        return rows
+    enriched = []
+    for row in rows:
+        if row.get("process"):
+            enriched.append(row)
+            continue
+        inode = row.get("inode")
+        if inode and inode in mapping:
+            process, pid = mapping[inode]
+            enriched.append(
+                _row(
+                    row["protocol"],
+                    row["address"],
+                    row["port"],
+                    process=process,
+                    pid=pid,
+                    inode=inode,
+                )
+            )
+        else:
+            enriched.append(row)
+    return enriched
 
 
 def read_host_listeners() -> list[dict]:
     rows: list[dict] = []
-    try:
-        completed = subprocess.run(
-            ["ss", "-H", "-lntu"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
+    # -p includes the owning process when capabilities allow it.
+    for args in (["ss", "-H", "-lntup"], ["ss", "-H", "-lntu"]):
+        try:
+            completed = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
         if completed.returncode == 0 and completed.stdout.strip():
             rows = parse_ss(completed.stdout)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+            if rows:
+                break
     if not rows:
         tcp = Path("/proc/net/tcp")
         tcp6 = Path("/proc/net/tcp6")
@@ -117,8 +266,17 @@ def read_host_listeners() -> list[dict]:
             rows.extend(parse_proc_net(tcp.read_text(encoding="utf-8", errors="replace"), ipv6=False))
         if tcp6.is_file():
             rows.extend(parse_proc_net(tcp6.read_text(encoding="utf-8", errors="replace"), ipv6=True))
-    # Stable order for the panel: public-facing listeners first, then port number.
-    return sorted(rows, key=lambda row: (0 if row["possibly_public"] else 1, row["port"], row["address"], row["protocol"]))
+    rows = enrich_with_inodes(rows)
+    return sorted(
+        rows,
+        key=lambda row: (0 if row["possibly_public"] else 1, row["port"], row["address"], row["protocol"]),
+    )
+
+
+def detect_ssh_ports(rows: list[dict] | None = None) -> list[int]:
+    rows = rows if rows is not None else read_host_listeners()
+    ports = sorted({int(row["port"]) for row in rows if row.get("is_ssh") and row.get("protocol") == "tcp"})
+    return ports
 
 
 def inventory_warning(*, host_network: bool, nft_backend: str) -> str:
@@ -129,9 +287,9 @@ def inventory_warning(*, host_network: bool, nft_backend: str) -> str:
                 "nft backend is still disabled: Preview/Apply will not change host nftables until backend is local or agent."
             )
         return (
-            "Host network is enabled. This list is the host listeners. "
-            "After Preview/Apply in enforce mode, table inet port_warden sits in front of inbound traffic; "
-            "ports not allowed, excluded, or management-SSH stay dropped."
+            "Host network is enabled. Process names come from the host listeners. "
+            "SSH is detected automatically from sshd. After Preview/Apply in enforce mode, "
+            "ports that are not kept open or management-SSH stay dropped."
         )
     return (
         "This process is not in the host network namespace, so the list is only what the container can see "

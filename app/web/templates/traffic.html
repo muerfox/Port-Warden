@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="lede">Attack pressure by destination port from auth failures, bans, UI login failures, and honeypot hits. This is not full packet traffic; it shows which ports attackers hit most in the selected window.</p>
+
+<p class="range">
+  Window:
+  <a href="/traffic?hours=24" {% if hours == 24 %}aria-current="page"{% endif %}>24h</a>
+  <a href="/traffic?hours=72" {% if hours == 72 %}aria-current="page"{% endif %}>72h</a>
+  <a href="/traffic?hours=168" {% if hours == 168 %}aria-current="page"{% endif %}>7d</a>
+</p>
+
+<section class="metrics">
+  <div><strong>{{ stats.total_events }}</strong> Attack events</div>
+  <div><strong>{{ stats.ports|length }}</strong> Ports hit</div>
+  <div><strong>{% if stats.ports %}{{ stats.ports[0].port }}{% else %}—{% endif %}</strong> Hottest port</div>
+</section>
+
+<h2>Attacks by port</h2>
+{% if stats.ports %}
+<figure class="chart-bars" aria-label="Attack counts by destination port">
+  {% for row in stats.ports %}
+  <div class="chart-row">
+    <div class="chart-label">tcp/{{ row.port }}</div>
+    <div class="chart-track">
+      <div class="chart-fill" style="width: {{ row.bar_pct }}%;" title="{{ row.count }} events"></div>
+    </div>
+    <div class="chart-value">{{ row.count }} <span>· {{ row.unique_sources }} sources · {{ row.share }}%</span></div>
+  </div>
+  {% endfor %}
+</figure>
+{% else %}
+<p class="note">No attack events with a destination port in this window yet. Brute-force ingest, failed panel logins, and honeypot hits will appear here.</p>
+{% endif %}
+
+{% if stats.timeline and stats.ports %}
+<h2>Hourly pressure (top ports)</h2>
+<figure class="chart-timeline" aria-label="Hourly attack totals">
+  {% for point in stats.timeline %}
+  <div class="timeline-col" title="{{ point.hour }} · {{ point.total }} events">
+    <div class="timeline-bar" style="height: {{ ((point.total / stats.timeline_peak) * 100)|round(1) }}%;"></div>
+  </div>
+  {% endfor %}
+</figure>
+<p class="note">Each column is one hour. Taller columns mean more attack events across the top ports.</p>
+{% endif %}
+
+<h2>Port detail</h2>
+<table>
+  <thead>
+    <tr><th>Port</th><th>Events</th><th>Unique sources</th><th>Share</th><th>Types</th><th>Last seen</th></tr>
+  </thead>
+  <tbody>
+  {% for row in stats.ports %}
+    <tr>
+      <td><code>{{ row.port }}</code></td>
+      <td>{{ row.count }}</td>
+      <td>{{ row.unique_sources }}</td>
+      <td>{{ row.share }}%</td>
+      <td>{% for kind, n in row.types.items() %}{{ kind }}={{ n }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td>{{ row.last_seen }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6">No port attack data yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

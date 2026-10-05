@@ -38,6 +38,8 @@ services:
       - SETUID
       - SETGID
       - NET_ADMIN
+      - SYS_PTRACE
+      - DAC_READ_SEARCH
     pids_limit: 128
     mem_limit: 256m
     restart: unless-stopped

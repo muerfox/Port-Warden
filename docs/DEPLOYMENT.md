@@ -36,7 +36,7 @@ PORT_WARDEN_NFT_BACKEND=agent
 cp .env.example .env
 # Before the first enforce Apply, add your admin CIDR:
 #   PORT_WARDEN_MANAGEMENT_CIDRS=<your-ip>/32,127.0.0.1/32,::1/128
-# Service ports are chosen in the Ports panel after discovery (Keep open / Set as SSH).
+# Service ports are chosen in the Ports panel after discovery (Keep open). SSH is auto-detected.
 docker compose up --build
 # or detached:
 docker compose up -d --build

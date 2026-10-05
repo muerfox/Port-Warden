@@ -26,6 +26,10 @@ def client_host(address) -> str:
 
 
 def log_event(event: dict) -> None:
+    if "dst_port" not in event:
+        raw = os.environ.get("DECOY_PORT", "")
+        if raw.isdigit():
+            event["dst_port"] = int(raw)
     line = json.dumps(event, separators=(",", ":"))
     sys.stdout.write(line + "\n")
     sys.stdout.flush()

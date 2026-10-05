@@ -9,7 +9,7 @@ from app.api.deps import client_ip, db_session, require_user
 from app.models import SessionRow, User
 from app.schemas import LoginIn, PasswordIn, TotpConfirm
 from app.security import hash_password, new_token, session_expiry, verify_dummy, verify_password
-from app.services.events import record_audit
+from app.services.events import record_audit, record_event
 from app.services.firewall.validate import validate_name
 from app.timeutil import utcnow
 
@@ -31,21 +31,35 @@ def authenticate(request: Request, db: Session, username: str, password: str, to
         limiter.fail(ip)
         raise HTTPException(status_code=401, detail="Invalid credentials") from None
     user = db.scalar(select(User).where(User.username == name))
+    ui_port = int(request.app.state.settings.bind_port)
+
+    def _deny() -> None:
+        record_event(
+            db,
+            request.app.state.json_log,
+            "login_failure",
+            src_ip=ip,
+            dst_port=ui_port,
+            action="denied",
+        )
+        # Persist before HTTPException rolls the request session back.
+        db.commit()
+
     if user is None:
         verify_dummy(password)
         limiter.fail(ip)
-        request.app.state.json_log.emit("auth_failure", src_ip=ip, action="denied", rule_id="", dst_port="")
+        _deny()
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not verify_password(user.password_hash, password):
         limiter.fail(ip)
-        request.app.state.json_log.emit("auth_failure", src_ip=ip, action="denied", rule_id="", dst_port="")
+        _deny()
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if user.totp_enabled:
         if not totp:
             raise MfaRequired()
         if not user.totp_secret or not pyotp.TOTP(user.totp_secret).verify(totp, valid_window=1):
             limiter.fail(ip)
-            request.app.state.json_log.emit("auth_failure", src_ip=ip, action="denied", rule_id="", dst_port="")
+            _deny()
             raise HTTPException(status_code=401, detail="Invalid credentials")
     limiter.clear(ip)
     return user

@@ -8,7 +8,7 @@ from app.timeutil import utcnow
 
 def test_parser_ignores_malformed_lines():
     parsed = parse_auth_line("Failed password for root from 203.0.113.10 port 22 ssh2")
-    assert parsed == {"src_ip": "203.0.113.10", "reason": "failed_password"}
+    assert parsed == {"src_ip": "203.0.113.10", "reason": "failed_password", "dst_port": 22}
     assert parse_auth_line("Failed password for invalid user admin from 203.0.113.11 port 22 ssh2")["src_ip"] == "203.0.113.11"
     assert parse_auth_line("Invalid user x from 2001:db8::5")["reason"] == "invalid_user"
     assert parse_auth_line("not a log line") is None

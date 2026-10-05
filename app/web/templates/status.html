@@ -6,9 +6,29 @@
   <div><strong>{{ "yes" if firewall.drift else "no" }}</strong> Drift</div>
   <div><strong>{{ listener_count }}</strong> Listeners</div>
   <div><strong>{{ ban_count }}</strong> Active bans</div>
+  <div><strong>{{ traffic.total_events }}</strong> Attacks (24h)</div>
 </section>
 <p>Backend <code>{{ firewall.backend }}</code> · mode <code>{{ firewall.mode }}</code></p>
 <p>Brute-force threshold {{ bruteforce.threshold }} failures in {{ bruteforce.window_seconds }}s, then a {{ bruteforce.ban_seconds }}s ban. Permanent bans after {{ bruteforce.permanent_after or "never" }}.</p>
 {% for warning in firewall.warnings %}<p class="warning">{{ warning }}</p>{% endfor %}
+
+<h2>Hottest ports (24h)</h2>
+{% if traffic.ports %}
+<figure class="chart-bars compact" aria-label="Top attacked ports in the last 24 hours">
+  {% for row in traffic.ports %}
+  <div class="chart-row">
+    <div class="chart-label">tcp/{{ row.port }}</div>
+    <div class="chart-track">
+      <div class="chart-fill" style="width: {{ row.bar_pct }}%;"></div>
+    </div>
+    <div class="chart-value">{{ row.count }}</div>
+  </div>
+  {% endfor %}
+</figure>
+<p><a href="/traffic">Open traffic graphs</a></p>
+{% else %}
+<p class="note">No port attack events in the last 24 hours yet. <a href="/traffic">Traffic</a></p>
+{% endif %}
+
 <p class="note">{{ note }}</p>
 {% endblock %}

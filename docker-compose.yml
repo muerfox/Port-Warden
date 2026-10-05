@@ -7,8 +7,8 @@
 # table inet port_warden in front of the host input path.
 # It is not --privileged. Preview/confirm is still required before Apply.
 #
-# Before the first enforce Apply, set PORT_WARDEN_SSH_PORT to your real SSH
-# port and put your admin CIDR in PORT_WARDEN_MANAGEMENT_CIDRS.
+# Before the first enforce Apply, put your admin CIDR in
+# PORT_WARDEN_MANAGEMENT_CIDRS. SSH is auto-detected from sshd.
 
 name: port-warden
 
@@ -48,8 +48,9 @@ services:
       - SETUID
       - SETGID
       - NET_ADMIN
-    # no-new-privileges is omitted here so setpriv can keep ambient NET_ADMIN
-    # after the uid drop for local nft apply.
+      - SYS_PTRACE
+      - DAC_READ_SEARCH
+    # no-new-privileges is omitted so setpriv can keep ambient caps after uid drop.
     pids_limit: 128
     mem_limit: 256m
     healthcheck:

@@ -13,6 +13,7 @@ from app.services.bruteforce.parser import parse_auth_line
 from app.services.bruteforce.tracker import FailureTracker
 from app.services.events import record_event
 from app.services.firewall.engine import FirewallEngine
+from app.services.inventory.workspace import effective_ssh_port
 from app.services.records import _cidrs, assert_ban_allowed, bf_config, create_ban
 from app.timeutil import is_expired, utcnow
 
@@ -66,15 +67,33 @@ def observe_ip(
     reason: str,
     *,
     now=None,
+    dst_port: int | None = None,
 ) -> dict:
     now = now or utcnow()
     config = bf_config(db, settings)
+    port = int(dst_port) if dst_port else effective_ssh_port(db, settings)
     if _in_cidrs(ip, settings.management_cidrs) or _in_cidrs(ip, _cidrs(db, "allow")):
-        record_event(db, logger, "auth_failure", src_ip=ip, action="ignored_allowlist", details={"reason": reason})
+        record_event(
+            db,
+            logger,
+            "auth_failure",
+            src_ip=ip,
+            dst_port=port,
+            action="ignored_allowlist",
+            details={"reason": reason},
+        )
         return {"src_ip": ip, "action": "ignored_allowlist", "reason": reason}
 
     if _active_ban(db, ip, now) is not None or _cooling(db, ip, now, config["cooldown_seconds"]):
-        record_event(db, logger, "auth_failure", src_ip=ip, action="cooldown", details={"reason": reason})
+        record_event(
+            db,
+            logger,
+            "auth_failure",
+            src_ip=ip,
+            dst_port=port,
+            action="cooldown",
+            details={"reason": reason},
+        )
         return {"src_ip": ip, "action": "cooldown", "reason": reason}
 
     count = tracker.add(ip, now, config["window_seconds"])
@@ -83,6 +102,7 @@ def observe_ip(
         logger,
         "auth_failure",
         src_ip=ip,
+        dst_port=port,
         action=reason,
         details={"count": count, "threshold": config["threshold"]},
     )
@@ -112,6 +132,7 @@ def observe_ip(
         logger,
         "ban",
         src_ip=ip,
+        dst_port=port,
         action="ban",
         rule_id=str(ban.id),
         details={"permanent": permanent, "source": "bruteforce"},
@@ -145,4 +166,5 @@ def observe_line(
         logger,
         parsed["src_ip"],
         parsed["reason"],
+        dst_port=parsed.get("dst_port"),
     )

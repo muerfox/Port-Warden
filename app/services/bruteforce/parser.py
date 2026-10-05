@@ -11,6 +11,7 @@ _PATTERNS = (
     ("failed_publickey", re.compile(r"Failed publickey for \S+ from (?P<ip>\S+)")),
     ("auth_failure", re.compile(r"authentication failure;.*\brhost=(?P<ip>[^\s]+)")),
 )
+_PORT = re.compile(r"\bport (?P<port>\d{1,5})\b")
 
 
 def parse_auth_line(line: str) -> dict | None:
@@ -26,5 +27,11 @@ def parse_auth_line(line: str) -> dict | None:
             ipaddress.ip_address(candidate)
         except ValueError:
             return None
-        return {"src_ip": candidate, "reason": reason}
+        result = {"src_ip": candidate, "reason": reason}
+        port_match = _PORT.search(line)
+        if port_match:
+            port = int(port_match.group("port"))
+            if 1 <= port <= 65535:
+                result["dst_port"] = port
+        return result
     return None
